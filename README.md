@@ -39,6 +39,9 @@ NOTION_API_KEY=your_notion_api_key
 NOTION_DATABASE_ID=your_notion_database_id
 ```
 
+> `.env.local` 파일은 보안상 Git에서 추적하지 않습니다.
+> 실제 키 값은 팀 노션 공유 문서에서 확인할 수 있습니다.
+
 ### 3. 개발 서버 실행
 
 ```bash
