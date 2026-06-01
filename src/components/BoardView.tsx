@@ -2,7 +2,7 @@
 /* Cadence — Board view: loads team tasks from GET /todos, member filter + status columns. */
 import { useEffect, useMemo, useState } from "react";
 import { Icon, Avatar } from "./primitives";
-import { getTodos, type TodoBoardItem } from "@/lib/api";
+import { getTodos, updateTodoStatus, type TodoBoardItem, type TodoStatus } from "@/lib/api";
 import { dday, ddayColor, ddayLabel, fmtRange, STATUS, type Status } from "@/lib/data";
 
 type Person = { id: string; name: string; initials: string; color: string };
@@ -27,6 +27,13 @@ const COLUMN_OF: Record<string, Status> = {
   DONE: "done",
 };
 
+// Board column → backend status to send on drop (the 예정 column maps back to TODO).
+const STATUS_OF: Record<Status, TodoStatus> = {
+  todo: "TODO",
+  progress: "IN_PROGRESS",
+  done: "DONE",
+};
+
 function personOf(it: TodoBoardItem): Person {
   return {
     id: String(it.user_id),
@@ -48,11 +55,31 @@ function toBoardTask(it: TodoBoardItem): BoardTask {
   };
 }
 
-function BoardCard({ task }: { task: BoardTask }) {
+function BoardCard({
+  task,
+  dragging,
+  onDragStart,
+  onDragEnd,
+}: {
+  task: BoardTask;
+  dragging: boolean;
+  onDragStart: (id: number) => void;
+  onDragEnd: () => void;
+}) {
   const diff = dday(task.endDate ?? task.date);
   const showD = task.status !== "done" && diff <= 7;
   return (
-    <div className="t-card">
+    <div
+      className={"t-card" + (dragging ? " dragging" : "")}
+      draggable
+      onDragStart={(e) => {
+        // Carry the task id so the drop target knows what moved (and enable the move cursor).
+        e.dataTransfer.setData("text/plain", String(task.id));
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart(task.id);
+      }}
+      onDragEnd={onDragEnd}
+    >
       <div className="ttop">
         <span className="ttl">{task.title}</span>
       </div>
@@ -73,10 +100,43 @@ function BoardCard({ task }: { task: BoardTask }) {
   );
 }
 
-function BoardColumn({ status, tasks }: { status: Status; tasks: BoardTask[] }) {
+function BoardColumn({
+  status,
+  tasks,
+  draggingId,
+  isOver,
+  onDragStartCard,
+  onDragEndCard,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: {
+  status: Status;
+  tasks: BoardTask[];
+  draggingId: number | null;
+  isOver: boolean;
+  onDragStartCard: (id: number) => void;
+  onDragEndCard: () => void;
+  onDragOver: (status: Status) => void;
+  onDragLeave: () => void;
+  onDrop: (status: Status) => void;
+}) {
   const meta = STATUS[status];
   return (
-    <div className="board-col">
+    <div
+      className={"board-col" + (isOver ? " drop-over" : "")}
+      onDragOver={(e) => {
+        // preventDefault is required for the column to count as a valid drop target.
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        onDragOver(status);
+      }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop(status);
+      }}
+    >
       <div className="col-head">
         <span className="dot" style={{ background: meta.color }} />
         <span className="t">{meta.label}</span>
@@ -84,7 +144,13 @@ function BoardColumn({ status, tasks }: { status: Status; tasks: BoardTask[] }) 
       </div>
       <div className="col-cards">
         {tasks.map((t) => (
-          <BoardCard key={t.id} task={t} />
+          <BoardCard
+            key={t.id}
+            task={t}
+            dragging={draggingId === t.id}
+            onDragStart={onDragStartCard}
+            onDragEnd={onDragEndCard}
+          />
         ))}
         {tasks.length === 0 && (
           <div style={{ fontSize: 12.5, color: "var(--fg-3)", padding: "10px 4px", textAlign: "center" }}>
@@ -103,6 +169,9 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   const [tasks, setTasks] = useState<BoardTask[] | null>(null);
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("all");
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [overCol, setOverCol] = useState<Status | null>(null);
+  const [moveErr, setMoveErr] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -120,6 +189,28 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
       alive = false;
     };
   }, [refreshKey]);
+
+  // Drop a card onto a column: optimistically move it, then PATCH the backend.
+  function handleDrop(toCol: Status) {
+    const id = draggingId;
+    setDraggingId(null);
+    setOverCol(null);
+    if (id == null) return;
+
+    const task = tasks?.find((t) => t.id === id);
+    if (!task || task.status === toCol) return; // no-op when dropped on its own column
+
+    const prev = task.status;
+    setMoveErr("");
+    // Optimistic update so the card moves instantly.
+    setTasks((cur) => cur && cur.map((t) => (t.id === id ? { ...t, status: toCol } : t)));
+
+    updateTodoStatus(id, STATUS_OF[toCol]).catch((e) => {
+      // Roll back on failure and surface the error.
+      setTasks((cur) => cur && cur.map((t) => (t.id === id ? { ...t, status: prev } : t)));
+      setMoveErr(e instanceof Error ? e.message : "일감 상태 변경에 실패했어요.");
+    });
+  }
 
   // Distinct people present on the board, for the filter chips.
   const people = useMemo(() => {
@@ -151,9 +242,27 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
         ))}
       </div>
 
+      {moveErr && (
+        <div style={{ fontSize: 12.5, color: "var(--danger, #c0392b)", padding: "0 4px 10px" }}>{moveErr}</div>
+      )}
+
       <div className="board">
         {cols.map((c) => (
-          <BoardColumn key={c} status={c} tasks={shown.filter((t) => t.status === c)} />
+          <BoardColumn
+            key={c}
+            status={c}
+            tasks={shown.filter((t) => t.status === c)}
+            draggingId={draggingId}
+            isOver={overCol === c && draggingId != null}
+            onDragStartCard={setDraggingId}
+            onDragEndCard={() => {
+              setDraggingId(null);
+              setOverCol(null);
+            }}
+            onDragOver={setOverCol}
+            onDragLeave={() => setOverCol(null)}
+            onDrop={handleDrop}
+          />
         ))}
       </div>
     </div>
