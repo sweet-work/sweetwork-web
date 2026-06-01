@@ -54,12 +54,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   if (!user) {
     return (
       <Login
-        onLogin={(email) =>
+        onLogin={(email, data) =>
           setUser({
-            id: email,
+            id: String(data.id),
             email,
-            name: email.split("@")[0],
-            initials: email.slice(0, 2).toUpperCase(),
+            name: data.name,
+            initials: data.name.slice(0, 2).toUpperCase(),
             color: "#6AA823",
           })
         }
