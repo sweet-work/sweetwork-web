@@ -28,9 +28,12 @@ export interface CurrentUser {
   color: string;
 }
 
-// Anchor "today" so D-day counters are deterministic.
-export const TODAY = new Date(2026, 4, 11); // 2026-05-11 (Mon)
-export const TODAY_STR = "2026-05-11";
+// "Today" — the real current date (normalized to local midnight so D-day math is clean).
+const _now = new Date();
+export const TODAY = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
+export const TODAY_STR = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, "0")}-${String(
+  TODAY.getDate()
+).padStart(2, "0")}`;
 
 export const members: Member[] = [
   { id: "mk", name: "민경", initials: "MK", color: "#6AA823" },
