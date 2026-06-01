@@ -1,8 +1,11 @@
 "use client";
 /* Cadence — Login screen. Company-email only; unknown emails are created on the spot. */
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Icon, Mark } from "./primitives";
 import { login, signup, type AuthResponse } from "@/lib/api";
+
+// Where we remember the last email used to sign in, so we can pre-fill it next time.
+const LAST_EMAIL_KEY = "cadence-last-email";
 
 export default function Login({
   onLogin,
@@ -15,6 +18,23 @@ export default function Login({
   const [loading, setLoading] = useState(false);
   // Revealed when the email isn't registered yet and we need a name to create the account.
   const [needsName, setNeedsName] = useState(false);
+  // "Remember email" — when on, we persist the email for next time.
+  const [remember, setRemember] = useState(false);
+
+  // Pre-fill with the last email used on this device, and tick "remember" if we had one.
+  useEffect(() => {
+    const saved = localStorage.getItem(LAST_EMAIL_KEY);
+    if (saved) {
+      setEmail(saved);
+      setRemember(true);
+    }
+  }, []);
+
+  // Persist (or forget) the email based on the checkbox.
+  function rememberEmail(value: string) {
+    if (remember) localStorage.setItem(LAST_EMAIL_KEY, value);
+    else localStorage.removeItem(LAST_EMAIL_KEY);
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -36,12 +56,14 @@ export default function Login({
     try {
       if (needsName) {
         const data = await signup(email, name.trim());
+        rememberEmail(email);
         onLogin(email, data);
         return;
       }
 
       const existing = await login(email);
       if (existing) {
+        rememberEmail(email);
         onLogin(email, existing);
         return;
       }
@@ -74,7 +96,7 @@ export default function Login({
               type="email"
               placeholder="you@company.com"
               value={email}
-              autoComplete="off"
+              autoComplete="email"
               disabled={loading || needsName}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -83,6 +105,18 @@ export default function Login({
             />
           </div>
         </div>
+
+        {!needsName && (
+          <label className="remember">
+            <input
+              type="checkbox"
+              checked={remember}
+              disabled={loading}
+              onChange={(e) => setRemember(e.target.checked)}
+            />
+            <span>이메일 기억하기</span>
+          </label>
+        )}
 
         {needsName && (
           <div className="input">

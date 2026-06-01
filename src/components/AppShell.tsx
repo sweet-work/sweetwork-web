@@ -4,13 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, Avatar, Mark } from "./primitives";
-import {
-  members,
-  STATUS,
-  TODAY_STR,
-  type CurrentUser,
-  type Status,
-} from "@/lib/data";
+import { members, TODAY_STR, type CurrentUser } from "@/lib/data";
 
 export type View = "dashboard" | "board" | "calendar" | "report";
 
@@ -84,13 +78,17 @@ const TITLES: Record<View, { t: string; s: string }> = {
 };
 
 export function TopBar({
+  user,
   theme,
   toggleTheme,
   onNewTask,
+  onLogout,
 }: {
+  user: CurrentUser;
   theme: string;
   toggleTheme: () => void;
   onNewTask: () => void;
+  onLogout: () => void;
 }) {
   const meta = TITLES[viewFromPath(usePathname())];
   return (
@@ -106,6 +104,13 @@ export function TopBar({
       <button className="btn btn-primary btn-sm" onClick={onNewTask}>
         <Icon name="plus" size={16} /> 일감 추가
       </button>
+      <div className="profile">
+        <Avatar member={user} size={28} />
+        <span className="profile-name">{user.name}</span>
+        <button className="icon-btn" onClick={onLogout} title="로그아웃">
+          <Icon name="log-out" size={18} />
+        </button>
+      </div>
     </header>
   );
 }
@@ -114,7 +119,6 @@ export interface NewTaskInput {
   title: string;
   date: string;
   endDate?: string;
-  status: Status;
 }
 
 export function NewTaskModal({
@@ -122,13 +126,13 @@ export function NewTaskModal({
   onAdd,
 }: {
   onClose: () => void;
-  onAdd: (t: NewTaskInput) => void;
+  onAdd: (t: NewTaskInput) => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(TODAY_STR);
   const [endDate, setEndDate] = useState(TODAY_STR);
-  const [status, setStatus] = useState<Status>("todo");
-  const statuses: Status[] = ["todo", "progress", "done"];
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
 
   // Keep the range valid: the end never precedes the start.
   function changeStart(v: string) {
@@ -136,10 +140,17 @@ export function NewTaskModal({
     if (endDate < v) setEndDate(v);
   }
 
-  function save() {
-    if (!title.trim()) return;
-    onAdd({ title: title.trim(), date, endDate: endDate > date ? endDate : undefined, status });
-    onClose();
+  async function save() {
+    if (saving || !title.trim()) return;
+    setSaving(true);
+    setErr("");
+    try {
+      await onAdd({ title: title.trim(), date, endDate: endDate > date ? endDate : undefined });
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "일감 등록에 실패했어요.");
+      setSaving(false);
+    }
   }
 
   return (
@@ -165,40 +176,30 @@ export function NewTaskModal({
               />
             </div>
           </div>
-          <div className="input">
-            <label>시작일</label>
-            <div className="field">
-              <Icon name="calendar" size={17} />
-              <input type="date" value={date} onChange={(e) => changeStart(e.target.value)} />
+          <div className="form-row">
+            <div className="input">
+              <label>시작일</label>
+              <div className="field">
+                <Icon name="calendar" size={17} />
+                <input type="date" value={date} onChange={(e) => changeStart(e.target.value)} />
+              </div>
+            </div>
+            <div className="input">
+              <label>종료일</label>
+              <div className="field">
+                <Icon name="calendar" size={17} />
+                <input type="date" value={endDate} min={date} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
             </div>
           </div>
-          <div className="input">
-            <label>종료일</label>
-            <div className="field">
-              <Icon name="calendar" size={17} />
-              <input type="date" value={endDate} min={date} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
-          <div className="input">
-            <label>상태</label>
-            <div className="seg-pick">
-              {statuses.map((s) => {
-                const meta = STATUS[s];
-                return (
-                  <button key={s} className={status === s ? "active" : ""} onClick={() => setStatus(s)}>
-                    <span className="dot" style={{ background: meta.color }} /> {meta.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {err && <div className="err">{err}</div>}
         </div>
         <div className="mfoot">
-          <button className="btn btn-ghost" onClick={onClose}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>
             취소
           </button>
-          <button className="btn btn-primary" onClick={save}>
-            추가하기
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? "등록 중…" : "추가하기"}
           </button>
         </div>
       </div>
