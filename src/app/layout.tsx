@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppProvider } from "@/components/AppContext";
 
 export const metadata: Metadata = {
   title: "Cadence — 팀 일감 공유",
@@ -10,7 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" data-theme="light">
       <body>
-        <div id="root">{children}</div>
+        <div id="root">
+          <AppProvider>{children}</AppProvider>
+        </div>
       </body>
     </html>
   );

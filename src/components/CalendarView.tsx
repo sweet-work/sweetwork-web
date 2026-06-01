@@ -1,7 +1,7 @@
 "use client";
 /* Cadence — Calendar view: month grid (May 2026) with task events. */
 import { useMemo, type CSSProperties } from "react";
-import { WEEKDAYS, STATUS, TODAY_STR, type Task } from "@/lib/data";
+import { WEEKDAYS, STATUS, TODAY_STR, datesInRange, taskEnd, type Task } from "@/lib/data";
 
 export default function CalendarView({ tasks }: { tasks: Task[] }) {
   const year = 2026;
@@ -10,7 +10,9 @@ export default function CalendarView({ tasks }: { tasks: Task[] }) {
   const byDate = useMemo(() => {
     const map: Record<string, Task[]> = {};
     tasks.forEach((t) => {
-      (map[t.date] = map[t.date] || []).push(t);
+      datesInRange(t.date, taskEnd(t)).forEach((ds) => {
+        (map[ds] = map[ds] || []).push(t);
+      });
     });
     return map;
   }, [tasks]);

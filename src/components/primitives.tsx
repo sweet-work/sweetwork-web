@@ -61,8 +61,6 @@ export function StatusBadge({ status }: { status: Status }) {
 
 /* The Cadence logomark (rising rhythm bars). */
 export function Mark({ size = 32, radius = 9 }: { size?: number; radius?: number }) {
-  const bars = [size * 0.28, size * 0.45, size * 0.62];
-  const w = Math.max(2.5, size * 0.09);
   return (
     <span
       className="mark-el"
@@ -70,19 +68,17 @@ export function Mark({ size = 32, radius = 9 }: { size?: number; radius?: number
         width: size,
         height: size,
         borderRadius: radius,
-        background: "var(--accent)",
+        background: "#B6E94D",
         display: "inline-flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
-        gap: size * 0.08,
-        paddingBottom: size * 0.24,
+        fontSize: size * 0.58,
+        lineHeight: 1,
         boxSizing: "border-box",
         flex: "none",
       }}
     >
-      {bars.map((h, i) => (
-        <i key={i} style={{ display: "block", width: w, height: h, borderRadius: w / 2, background: "#fff" }} />
-      ))}
+      👀
     </span>
   );
 }

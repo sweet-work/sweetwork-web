@@ -1,5 +1,5 @@
-import CadenceApp from "@/components/CadenceApp";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <CadenceApp />;
+  redirect("/dashboard");
 }
