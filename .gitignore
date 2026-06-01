@@ -30,4 +30,6 @@ next-env.d.ts
 /.vscode
 /.idea
 /.claude
-/docs
+
+# docs (PDCA/bkit working files)
+/docs/
