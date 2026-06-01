@@ -1,0 +1,155 @@
+/* ============================================================
+   CADENCE — Design Tokens
+   A calm, human team task-sharing tool.
+   Korean-first (Pretendard), warm-neutral surfaces,
+   one confident clay accent, mono for D-day / dates.
+   ============================================================ */
+
+/* ---- Fonts ----
+   Pretendard: the canonical high-quality Korean+Latin web font.
+   Loaded from its official jsDelivr CDN (open source, OFL).
+   IBM Plex Mono: tabular numerals for D-day counters & dates.   */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* ---------- Type families ---------- */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* ---------- Type scale (size / line-height / weight / tracking) ----------
+     Base body = 14px. UI density is comfortable but not airy.            */
+  --display-size: 40px;  --display-lh: 46px;  --display-wt: 700;  --display-ls: -0.02em;
+  --h1-size: 28px;       --h1-lh: 34px;       --h1-wt: 700;       --h1-ls: -0.015em;
+  --h2-size: 22px;       --h2-lh: 28px;       --h2-wt: 650;       --h2-ls: -0.01em;
+  --h3-size: 17px;       --h3-lh: 24px;       --h3-wt: 600;       --h3-ls: -0.005em;
+  --body-lg-size: 16px;  --body-lg-lh: 25px;  --body-lg-wt: 400;
+  --body-size: 14px;     --body-lh: 21px;     --body-wt: 400;
+  --label-size: 13px;    --label-lh: 18px;    --label-wt: 550;
+  --caption-size: 12px;  --caption-lh: 16px;  --caption-wt: 500;  --caption-ls: 0.005em;
+  --mono-size: 13px;     --mono-lh: 18px;     --mono-wt: 500;     --mono-ls: 0.01em;
+
+  /* ---------- Spacing (4px grid) ---------- */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
+
+  /* ---------- Radii ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;   /* buttons, inputs */
+  --radius-lg: 14px;   /* cards */
+  --radius-xl: 20px;   /* panels, modals */
+  --radius-pill: 999px;
+
+  /* ---------- Easing / motion ---------- */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}
+
+/* ============================================================
+   LIGHT THEME (default)
+   Warm off-white "paper", warm near-black ink.
+   ============================================================ */
+:root,
+[data-theme="light"] {
+  --bg-base:        #FAF8F4;  /* app canvas */
+  --surface-1:      #FFFFFF;  /* cards, panels */
+  --surface-2:      #F4F0E9;  /* hover / raised wells */
+  --surface-sunken: #F1ECE3;  /* inputs, tracks */
+  --overlay:        rgba(28, 24, 18, 0.42);
+
+  --border-subtle:  #E9E3D8;  /* hairlines */
+  --border-strong:  #D9D1C2;  /* dividers, input borders */
+
+  --fg-1: #211D17;  /* primary text */
+  --fg-2: #6B6356;  /* secondary text */
+  --fg-3: #9C9384;  /* muted / placeholder */
+  --fg-on-accent: #FFFFFF;
+
+  /* Brand accent — warm clay */
+  --accent:        #C75D3C;
+  --accent-hover:  #B24E2F;
+  --accent-press:  #9C4327;
+  --accent-soft:   #F8E8E0;  /* tinted surface */
+  --accent-ring:   rgba(199, 93, 60, 0.28);
+
+  /* Status / semantic (hue-separated from accent) */
+  --status-todo:      #8A8275;  --status-todo-soft:     #EEEAE1;
+  --status-progress:  #3F6FE5;  --status-progress-soft: #E6ECFC;
+  --status-done:      #4E9A6B;  --status-done-soft:     #E2F1E8;
+  --warn:             #C2891C;  --warn-soft:            #F7EDD3;
+  --danger:           #D8453F;  --danger-soft:          #FBE3E1;
+
+  /* D-day urgency ramp (calm → hot) */
+  --dday-far:   #8A8275;   /* D-30+   */
+  --dday-near:  #C2891C;   /* D-7     */
+  --dday-soon:  #D87A2E;   /* D-3     */
+  --dday-now:   #D8453F;   /* D-1/D0  */
+
+  /* Elevation — warm-tinted, low, calm */
+  --shadow-sm: 0 1px 2px rgba(40, 32, 20, 0.06);
+  --shadow-md: 0 2px 6px rgba(40, 32, 20, 0.07), 0 1px 2px rgba(40, 32, 20, 0.05);
+  --shadow-lg: 0 12px 28px rgba(40, 32, 20, 0.12), 0 2px 6px rgba(40, 32, 20, 0.06);
+}
+
+/* ============================================================
+   DARK THEME
+   Warm charcoal, warm off-white ink. Accent lifted for contrast.
+   ============================================================ */
+[data-theme="dark"] {
+  --bg-base:        #15130F;
+  --surface-1:      #1E1B15;
+  --surface-2:      #272219;
+  --surface-sunken: #19160F;
+  --overlay:        rgba(0, 0, 0, 0.58);
+
+  --border-subtle:  #322C22;
+  --border-strong:  #443C2D;
+
+  --fg-1: #F3EFE7;
+  --fg-2: #A89E8E;
+  --fg-3: #756C5D;
+  --fg-on-accent: #1A1209;
+
+  --accent:        #E0734E;
+  --accent-hover:  #EC8460;
+  --accent-press:  #C9603D;
+  --accent-soft:   #3A2418;
+  --accent-ring:   rgba(224, 115, 78, 0.34);
+
+  --status-todo:      #9A9081;  --status-todo-soft:     #2A251C;
+  --status-progress:  #6E92F0;  --status-progress-soft: #1E2436;
+  --status-done:      #6FB78A;  --status-done-soft:     #1A2A20;
+  --warn:             #D9A23A;  --warn-soft:            #2E2715;
+  --danger:           #E5635D;  --danger-soft:          #331A18;
+
+  --dday-far:   #9A9081;
+  --dday-near:  #D9A23A;
+  --dday-soon:  #E68A45;
+  --dday-now:   #E5635D;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.55), 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================
+   SEMANTIC TEXT ROLES
+   ============================================================ */
+.t-display {
+  font-family: var(--font-sans); font-size: var(--display-size);
+  line-height: var(--display-lh); font-weight: var(--display-wt);
+  letter-spacing: var(--display-ls); color: var(--fg-1);
+}
+.t-h1 { font-family: var(--font-sans); font-size: var(--h1-size); line-height: var(--h1-lh); font-weight: var(--h1-wt); letter-spacing: var(--h1-ls); color: var(--fg-1); }
+.t-h2 { font-family: var(--font-sans); font-size: var(--h2-size); line-height: var(--h2-lh); font-weight: var(--h2-wt); letter-spacing: var(--h2-ls); color: var(--fg-1); }
+.t-h3 { font-family: var(--font-sans); font-size: var(--h3-size); line-height: var(--h3-lh); font-weight: var(--h3-wt); letter-spacing: var(--h3-ls); color: var(--fg-1); }
+.t-body-lg { font-family: var(--font-sans); font-size: var(--body-lg-size); line-height: var(--body-lg-lh); font-weight: var(--body-lg-wt); color: var(--fg-1); }
+.t-body { font-family: var(--font-sans); font-size: var(--body-size); line-height: var(--body-lh); font-weight: var(--body-wt); color: var(--fg-1); }
+.t-label { font-family: var(--font-sans); font-size: var(--label-size); line-height: var(--label-lh); font-weight: var(--label-wt); color: var(--fg-1); }
+.t-caption { font-family: var(--font-sans); font-size: var(--caption-size); line-height: var(--caption-lh); font-weight: var(--caption-wt); letter-spacing: var(--caption-ls); color: var(--fg-2); }
+.t-mono { font-family: var(--font-mono); font-size: var(--mono-size); line-height: var(--mono-lh); font-weight: var(--mono-wt); letter-spacing: var(--mono-ls); font-variant-numeric: tabular-nums; }
