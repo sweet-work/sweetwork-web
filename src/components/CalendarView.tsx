@@ -2,6 +2,7 @@
 /* Cadence — Calendar view: D-day strip + navigable month grid with task events. */
 import { useMemo, useState, type CSSProperties } from "react";
 import { Icon } from "./primitives";
+import { holidayName } from "@/lib/holidays";
 import {
   WEEKDAYS,
   STATUS,
@@ -105,7 +106,7 @@ export default function CalendarView({ tasks }: { tasks: Task[] }) {
       <div className="cal">
       <div className="cal-week head">
         {WEEKDAYS.map((w, i) => (
-          <div key={w} className={i === 0 ? "sun" : ""}>
+          <div key={w} className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>
             {w}
           </div>
         ))}
@@ -116,12 +117,20 @@ export default function CalendarView({ tasks }: { tasks: Task[] }) {
             const ds = !c.out ? dateStr(c.day) : null;
             const evs = ds ? byDate[ds] || [] : [];
             const isToday = ds === TODAY_STR;
+            const holiday = ds ? holidayName(ds) : null;
             return (
               <div
                 key={ci}
-                className={"cal-cell" + (c.out ? " out" : "") + (isToday ? " today" : "")}
+                className={
+                  "cal-cell" +
+                  (ci === 0 ? " sun" : ci === 6 ? " sat" : "") +
+                  (holiday ? " holiday" : "") +
+                  (c.out ? " out" : "") +
+                  (isToday ? " today" : "")
+                }
               >
                 <span className="dnum">{c.day}</span>
+                {holiday && <div className="cal-holiday">{holiday}</div>}
                 {evs.slice(0, 3).map((t) => (
                   <div
                     key={t.id}

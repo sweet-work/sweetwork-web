@@ -242,12 +242,17 @@ button { font-family: inherit; }
 .cal-week.head { border-bottom: 1px solid var(--border-subtle); }
 .cal-week.head div { padding: 10px; font-size: 12px; font-weight: 600; color: var(--fg-3); text-align: left; }
 .cal-week.head div.sun { color: var(--danger); }
+.cal-week.head div.sat { color: var(--status-progress); }
 .cal-cell { min-width: 0; min-height: 104px; border-right: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; }
 .cal-cell:nth-child(7n) { border-right: 0; }
 .cal-cell.out { background: var(--surface-sunken); }
 .cal-cell .dnum { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
-.cal-cell.today .dnum { background: var(--accent); color: #fff; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.cal-cell.sun .dnum { color: var(--danger); }
+.cal-cell.sat .dnum { color: var(--status-progress); }
+.cal-cell.holiday .dnum { color: var(--danger); }
 .cal-cell.out .dnum { color: var(--fg-3); }
+.cal-cell.today .dnum { background: var(--accent); color: #fff; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.cal-holiday { font-size: 11px; font-weight: 600; color: var(--danger); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-event { font-size: 11.5px; font-weight: 500; padding: 2px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid var(--ev, var(--status-todo)); background: var(--surface-2); }
 .cal-more { font-size: 11px; color: var(--fg-3); padding-left: 6px; }
 
