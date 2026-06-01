@@ -1,33 +1,16 @@
 "use client";
-/* Cadence — Dashboard: D-day strip + today's tasks + team activity. */
-import type { CSSProperties } from "react";
+/* Cadence — Dashboard: today's tasks + team activity. */
 import { Icon, Avatar, StatusBadge } from "./primitives";
 import {
   members,
   personById,
   dday,
-  ddayColor,
-  ddayLabel,
   fmtRange,
   taskEnd,
   TODAY_STR,
   type Task,
   type CurrentUser,
 } from "@/lib/data";
-
-function DdayCard({ task }: { task: Task }) {
-  const diff = dday(taskEnd(task));
-  const color = ddayColor(diff);
-  return (
-    <div className="dday-card" style={{ "--bar": color } as CSSProperties}>
-      <div className="num" style={{ color }}>
-        {ddayLabel(diff)}
-      </div>
-      <div className="lab">{task.ddayLabel || task.title}</div>
-      <div className="date">{fmtRange(task.date, task.endDate)}</div>
-    </div>
-  );
-}
 
 export function TaskRow({
   task,
@@ -68,8 +51,6 @@ export default function Dashboard({
   onToggle: (id: number) => void;
   currentUser: CurrentUser;
 }) {
-  const pinned = tasks.filter((t) => t.pinned).sort((a, b) => dday(taskEnd(a)) - dday(taskEnd(b)));
-
   // Today's + upcoming (next 4 days), not done — the "what's live now" list.
   // A task counts as "today" when its range spans today.
   const today = tasks.filter((t) => t.date <= TODAY_STR && TODAY_STR <= taskEnd(t));
@@ -89,16 +70,6 @@ export default function Dashboard({
 
   return (
     <div className="fade-in">
-      <div className="section-head">
-        <h2>중요 일정</h2>
-        <span className="count">D-day</span>
-      </div>
-      <div className="dday-strip">
-        {pinned.map((t) => (
-          <DdayCard key={t.id} task={t} />
-        ))}
-      </div>
-
       <div className="dash-grid">
         <div>
           <div className="section-head">

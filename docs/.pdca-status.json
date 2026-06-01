@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-06-01T06:18:30.648Z",
+  "lastUpdated": "2026-06-01T06:40:16.843Z",
   "activeFeatures": [
     "sweet-work",
     "dashboard",
@@ -19,9 +19,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-06-01T05:10:00.390Z",
-        "lastUpdated": "2026-06-01T06:18:30.648Z"
+        "lastUpdated": "2026-06-01T06:40:16.843Z"
       },
-      "lastFile": "/Users/kangminhee/Desktop/workspace/sweet-work/src/components/AppContext.tsx"
+      "lastFile": "/Users/kangminhee/Desktop/workspace/sweet-work/src/components/CalendarView.tsx"
     },
     "dashboard": {
       "phase": "do",
@@ -84,7 +84,7 @@
   "session": {
     "startedAt": "2026-06-01T05:10:00.390Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-06-01T06:18:30.648Z"
+    "lastActivity": "2026-06-01T06:40:16.843Z"
   },
   "history": [
     {
@@ -491,6 +491,108 @@
     },
     {
       "timestamp": "2026-06-01T06:18:30.648Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:32:17.197Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:32:22.353Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:32:26.725Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:32:31.013Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:32:36.282Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:32:42.572Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:34:12.597Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:34:17.967Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:34:52.969Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:34:58.176Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:35:04.837Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:35:12.614Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:35:20.194Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:35:31.561Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:40:04.824Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:40:11.065Z",
+      "feature": "sweet-work",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-01T06:40:16.843Z",
       "feature": "sweet-work",
       "phase": "do",
       "action": "updated"

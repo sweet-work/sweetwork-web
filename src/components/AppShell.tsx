@@ -15,10 +15,10 @@ import {
 export type View = "dashboard" | "board" | "calendar" | "report";
 
 const NAV: { id: View; label: string; icon: string }[] = [
-  { id: "dashboard", label: "대시보드", icon: "layout-dashboard" },
+  // 대시보드 탭은 아직 사용하지 않아 네비게이션에서 숨김 (라우트/페이지는 유지).
   { id: "board", label: "보드", icon: "columns-3" },
   { id: "calendar", label: "캘린더", icon: "calendar-days" },
-  { id: "report", label: "주간 보고", icon: "sparkles" },
+  { id: "report", label: "AI 주간 보고 생성", icon: "sparkles" },
 ];
 
 /* Resolve the active view from the current pathname (e.g. "/board" → "board"). */
@@ -47,7 +47,7 @@ export function Sidebar({ currentUser }: { currentUser: CurrentUser }) {
         </Link>
       ))}
 
-      <div className="nav-label">팀</div>
+      <div className="nav-label">우리 팀</div>
       <div className="member-list">
         {members.map((m) => (
           <div key={m.id} className="member-row">
@@ -80,7 +80,7 @@ const TITLES: Record<View, { t: string; s: string }> = {
   dashboard: { t: "대시보드", s: "오늘의 일감과 다가오는 일정" },
   board: { t: "보드", s: "상태별로 보는 팀 일감" },
   calendar: { t: "캘린더", s: "한 달 일정 한눈에 보기" },
-  report: { t: "주간 보고", s: "AI가 정리하는 이번 주 업무" },
+  report: { t: "AI 주간 보고 생성", s: "AI가 정리하는 이번 주 업무" },
 };
 
 export function TopBar({
