@@ -13,13 +13,15 @@ export interface Task {
   id: number;
   title: string;
   member: string;
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (start of range)
+  endDate?: string; // YYYY-MM-DD (end of range; absent = single day)
   status: Status;
   pinned: boolean;
   ddayLabel?: string;
 }
 
 export interface CurrentUser {
+  id: string;
   email: string;
   name: string;
   initials: string;
@@ -31,7 +33,7 @@ export const TODAY = new Date(2026, 4, 11); // 2026-05-11 (Mon)
 export const TODAY_STR = "2026-05-11";
 
 export const members: Member[] = [
-  { id: "mk", name: "민경", initials: "MK", color: "#C75D3C" },
+  { id: "mk", name: "민경", initials: "MK", color: "#6AA823" },
   { id: "jh", name: "정현", initials: "JH", color: "#3F6FE5" },
   { id: "sy", name: "수영", initials: "SY", color: "#4E9A6B" },
   { id: "dw", name: "도원", initials: "DW", color: "#8A8275" },
@@ -66,6 +68,15 @@ export function memberById(id: string): Member | undefined {
   return members.find((m) => m.id === id);
 }
 
+/* Resolve a task owner by id — checks the seed team, then falls back to the logged-in user
+   (who owns the tasks they create themselves). */
+export function personById(
+  id: string,
+  currentUser?: CurrentUser | null
+): Member | CurrentUser | undefined {
+  return members.find((m) => m.id === id) ?? (currentUser?.id === id ? currentUser : undefined);
+}
+
 export function dday(dateStr: string): number {
   const d = new Date(dateStr + "T00:00:00");
   return Math.round((d.getTime() - TODAY.getTime()) / 86400000); // negative = past, 0 = today
@@ -87,4 +98,29 @@ export function ddayColor(diff: number): string {
 export function fmtDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return `${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} (${WEEKDAYS[d.getDay()]})`;
+}
+
+/* Display a task's schedule — single day, or "start ~ end" when it spans a range. */
+export function fmtRange(start: string, end?: string): string {
+  if (!end || end === start) return fmtDate(start);
+  return `${fmtDate(start)} ~ ${fmtDate(end)}`;
+}
+
+/* A task's deadline is the end of its range (or its single date). D-day counts to this. */
+export function taskEnd(task: Task): string {
+  return task.endDate ?? task.date;
+}
+
+/* Every YYYY-MM-DD from start to end, inclusive — used to spread a task across calendar days. */
+export function datesInRange(start: string, end: string): string[] {
+  const out: string[] = [];
+  const cur = new Date(start + "T00:00:00");
+  const last = new Date(end + "T00:00:00");
+  while (cur <= last) {
+    out.push(
+      `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`
+    );
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
 }

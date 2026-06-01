@@ -1,10 +1,13 @@
 "use client";
 /* Cadence — app shell: Sidebar, TopBar, NewTaskModal. */
 import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Icon, Avatar, Mark } from "./primitives";
 import {
   members,
   STATUS,
+  TODAY_STR,
   type CurrentUser,
   type Status,
 } from "@/lib/data";
@@ -12,21 +15,20 @@ import {
 export type View = "dashboard" | "board" | "calendar" | "report";
 
 const NAV: { id: View; label: string; icon: string }[] = [
-  { id: "dashboard", label: "대시보드", icon: "layout-dashboard" },
+  // 대시보드 탭은 아직 사용하지 않아 네비게이션에서 숨김 (라우트/페이지는 유지).
   { id: "board", label: "보드", icon: "columns-3" },
   { id: "calendar", label: "캘린더", icon: "calendar-days" },
-  { id: "report", label: "주간 보고", icon: "sparkles" },
+  { id: "report", label: "AI 주간 보고 생성", icon: "sparkles" },
 ];
 
-export function Sidebar({
-  view,
-  setView,
-  currentUser,
-}: {
-  view: View;
-  setView: (v: View) => void;
-  currentUser: CurrentUser;
-}) {
+/* Resolve the active view from the current pathname (e.g. "/board" → "board"). */
+export function viewFromPath(pathname: string): View {
+  const seg = pathname.split("/")[1];
+  return (NAV.some((n) => n.id === seg) ? seg : "dashboard") as View;
+}
+
+export function Sidebar({ currentUser }: { currentUser: CurrentUser }) {
+  const active = viewFromPath(usePathname());
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -35,17 +37,17 @@ export function Sidebar({
       </div>
 
       {NAV.map((n) => (
-        <button
+        <Link
           key={n.id}
-          className={"nav-item" + (view === n.id ? " active" : "")}
-          onClick={() => setView(n.id)}
+          href={`/${n.id}`}
+          className={"nav-item" + (active === n.id ? " active" : "")}
         >
           <Icon name={n.icon} size={18} />
           {n.label}
-        </button>
+        </Link>
       ))}
 
-      <div className="nav-label">팀</div>
+      <div className="nav-label">우리 팀</div>
       <div className="member-list">
         {members.map((m) => (
           <div key={m.id} className="member-row">
@@ -78,21 +80,19 @@ const TITLES: Record<View, { t: string; s: string }> = {
   dashboard: { t: "대시보드", s: "오늘의 일감과 다가오는 일정" },
   board: { t: "보드", s: "상태별로 보는 팀 일감" },
   calendar: { t: "캘린더", s: "한 달 일정 한눈에 보기" },
-  report: { t: "주간 보고", s: "AI가 정리하는 이번 주 업무" },
+  report: { t: "AI 주간 보고 생성", s: "AI가 정리하는 이번 주 업무" },
 };
 
 export function TopBar({
-  view,
   theme,
   toggleTheme,
   onNewTask,
 }: {
-  view: View;
   theme: string;
   toggleTheme: () => void;
   onNewTask: () => void;
 }) {
-  const meta = TITLES[view];
+  const meta = TITLES[viewFromPath(usePathname())];
   return (
     <header className="topbar">
       <div>
@@ -113,7 +113,7 @@ export function TopBar({
 export interface NewTaskInput {
   title: string;
   date: string;
-  member: string;
+  endDate?: string;
   status: Status;
 }
 
@@ -125,14 +125,20 @@ export function NewTaskModal({
   onAdd: (t: NewTaskInput) => void;
 }) {
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState("2026-05-14");
-  const [member, setMember] = useState(members[0].id);
+  const [date, setDate] = useState(TODAY_STR);
+  const [endDate, setEndDate] = useState(TODAY_STR);
   const [status, setStatus] = useState<Status>("todo");
   const statuses: Status[] = ["todo", "progress", "done"];
 
+  // Keep the range valid: the end never precedes the start.
+  function changeStart(v: string) {
+    setDate(v);
+    if (endDate < v) setEndDate(v);
+  }
+
   function save() {
     if (!title.trim()) return;
-    onAdd({ title: title.trim(), date, member, status });
+    onAdd({ title: title.trim(), date, endDate: endDate > date ? endDate : undefined, status });
     onClose();
   }
 
@@ -160,20 +166,17 @@ export function NewTaskModal({
             </div>
           </div>
           <div className="input">
-            <label>날짜</label>
+            <label>시작일</label>
             <div className="field">
               <Icon name="calendar" size={17} />
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <input type="date" value={date} onChange={(e) => changeStart(e.target.value)} />
             </div>
           </div>
           <div className="input">
-            <label>담당자</label>
-            <div className="seg-pick">
-              {members.slice(0, 3).map((m) => (
-                <button key={m.id} className={member === m.id ? "active" : ""} onClick={() => setMember(m.id)}>
-                  {m.name}
-                </button>
-              ))}
+            <label>종료일</label>
+            <div className="field">
+              <Icon name="calendar" size={17} />
+              <input type="date" value={endDate} min={date} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
           <div className="input">

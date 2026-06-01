@@ -68,14 +68,14 @@
   --fg-1: #211D17;  /* primary text */
   --fg-2: #6B6356;  /* secondary text */
   --fg-3: #9C9384;  /* muted / placeholder */
-  --fg-on-accent: #FFFFFF;
+  --fg-on-accent: #18290A;
 
-  /* Brand accent — warm clay */
-  --accent:        #C75D3C;
-  --accent-hover:  #B24E2F;
-  --accent-press:  #9C4327;
-  --accent-soft:   #F8E8E0;  /* tinted surface */
-  --accent-ring:   rgba(199, 93, 60, 0.28);
+  /* Brand accent — fresh lime */
+  --accent:        #8BCE3C;
+  --accent-hover:  #7BBE2C;
+  --accent-press:  #6AA823;
+  --accent-soft:   #EDF6DA;  /* tinted surface */
+  --accent-ring:   rgba(139, 206, 60, 0.30);
 
   /* Status / semantic (hue-separated from accent) */
   --status-todo:      #8A8275;  --status-todo-soft:     #EEEAE1;
@@ -113,13 +113,13 @@
   --fg-1: #F3EFE7;
   --fg-2: #A89E8E;
   --fg-3: #756C5D;
-  --fg-on-accent: #1A1209;
+  --fg-on-accent: #14210A;
 
-  --accent:        #E0734E;
-  --accent-hover:  #EC8460;
-  --accent-press:  #C9603D;
-  --accent-soft:   #3A2418;
-  --accent-ring:   rgba(224, 115, 78, 0.34);
+  --accent:        #A6E04F;
+  --accent-hover:  #B6EA66;
+  --accent-press:  #93C93F;
+  --accent-soft:   #2B3517;
+  --accent-ring:   rgba(166, 224, 79, 0.34);
 
   --status-todo:      #9A9081;  --status-todo-soft:     #2A251C;
   --status-progress:  #6E92F0;  --status-progress-soft: #1E2436;

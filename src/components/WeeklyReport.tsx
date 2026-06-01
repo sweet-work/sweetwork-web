@@ -2,7 +2,7 @@
 /* Cadence — Weekly report. Simulated AI generation from the week's tasks. */
 import { useState } from "react";
 import { Icon } from "./primitives";
-import { memberById, fmtDate, type Task } from "@/lib/data";
+import { personById, fmtRange, type Task, type CurrentUser } from "@/lib/data";
 
 type ReportState = "empty" | "loading" | "done";
 
@@ -11,11 +11,13 @@ function Section({
   items,
   color,
   next,
+  currentUser,
 }: {
   title: string;
   items: Task[];
   color: string;
   next?: boolean;
+  currentUser: CurrentUser;
 }) {
   return (
     <div className={"report-section" + (next ? " next" : "")}>
@@ -28,7 +30,7 @@ function Section({
           <li key={t.id}>
             {t.title}{" "}
             <span style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-              · {memberById(t.member)?.name} · {fmtDate(t.date)}
+              · {personById(t.member, currentUser)?.name} · {fmtRange(t.date, t.endDate)}
             </span>
           </li>
         ))}
@@ -37,7 +39,7 @@ function Section({
   );
 }
 
-export default function WeeklyReport({ tasks }: { tasks: Task[] }) {
+export default function WeeklyReport({ tasks, currentUser }: { tasks: Task[]; currentUser: CurrentUser }) {
   const [state, setState] = useState<ReportState>("empty");
 
   const done = tasks.filter((t) => t.status === "done");
@@ -117,9 +119,9 @@ export default function WeeklyReport({ tasks }: { tasks: Task[] }) {
           모듈과 배포 작업이 중심이었고, 다음 주에는 분기 보고서 제출과 보안 점검이 예정되어 있어요.
         </p>
 
-        <Section title="이번 주 완료한 일" items={done} color="var(--status-done)" />
-        <Section title="진행 중인 일" items={prog} color="var(--status-progress)" />
-        <Section title="다음 주 계획" items={todo} color="var(--accent)" next />
+        <Section title="이번 주 완료한 일" items={done} color="var(--status-done)" currentUser={currentUser} />
+        <Section title="진행 중인 일" items={prog} color="var(--status-progress)" currentUser={currentUser} />
+        <Section title="다음 주 계획" items={todo} color="var(--accent)" next currentUser={currentUser} />
 
         <div style={{ display: "flex", gap: 9, marginTop: 24 }}>
           <button className="btn btn-secondary btn-sm">

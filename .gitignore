@@ -28,3 +28,8 @@ next-env.d.ts
 
 # editor
 /.vscode
+/.idea
+/.claude
+
+# docs (PDCA/bkit working files)
+/docs/

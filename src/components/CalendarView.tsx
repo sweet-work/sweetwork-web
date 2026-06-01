@@ -1,16 +1,61 @@
 "use client";
-/* Cadence — Calendar view: month grid (May 2026) with task events. */
-import { useMemo, type CSSProperties } from "react";
-import { WEEKDAYS, STATUS, TODAY_STR, type Task } from "@/lib/data";
+/* Cadence — Calendar view: D-day strip + navigable month grid with task events. */
+import { useMemo, useState, type CSSProperties } from "react";
+import { Icon } from "./primitives";
+import { holidayName } from "@/lib/holidays";
+import {
+  WEEKDAYS,
+  STATUS,
+  TODAY,
+  TODAY_STR,
+  datesInRange,
+  taskEnd,
+  dday,
+  ddayColor,
+  ddayLabel,
+  fmtRange,
+  type Task,
+} from "@/lib/data";
+
+function DdayCard({ task }: { task: Task }) {
+  const diff = dday(taskEnd(task));
+  const color = ddayColor(diff);
+  return (
+    <div className="dday-card" style={{ "--bar": color } as CSSProperties}>
+      <div className="num" style={{ color }}>
+        {ddayLabel(diff)}
+      </div>
+      <div className="lab">{task.ddayLabel || task.title}</div>
+      <div className="date">{fmtRange(task.date, task.endDate)}</div>
+    </div>
+  );
+}
 
 export default function CalendarView({ tasks }: { tasks: Task[] }) {
-  const year = 2026;
-  const month = 4; // May (0-indexed)
+  const pinned = tasks.filter((t) => t.pinned).sort((a, b) => dday(taskEnd(a)) - dday(taskEnd(b)));
+
+  // Displayed month; starts on the app's "today" so it lines up with the seeded tasks.
+  const [cursor, setCursor] = useState({ year: TODAY.getFullYear(), month: TODAY.getMonth() });
+  const { year, month } = cursor;
+
+  function shiftMonth(delta: number) {
+    setCursor((c) => {
+      const d = new Date(c.year, c.month + delta, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+  }
+  function goToday() {
+    setCursor({ year: TODAY.getFullYear(), month: TODAY.getMonth() });
+  }
+
+  const monthLabel = `${year}년 ${month + 1}월`;
 
   const byDate = useMemo(() => {
     const map: Record<string, Task[]> = {};
     tasks.forEach((t) => {
-      (map[t.date] = map[t.date] || []).push(t);
+      datesInRange(t.date, taskEnd(t)).forEach((ds) => {
+        (map[ds] = map[ds] || []).push(t);
+      });
     });
     return map;
   }, [tasks]);
@@ -33,10 +78,35 @@ export default function CalendarView({ tasks }: { tasks: Task[] }) {
   }
 
   return (
-    <div className="fade-in cal">
+    <div className="fade-in">
+      <div className="section-head">
+        <h2>중요 일정</h2>
+        <span className="count">D-day</span>
+      </div>
+      <div className="dday-strip">
+        {pinned.map((t) => (
+          <DdayCard key={t.id} task={t} />
+        ))}
+      </div>
+
+      <div className="cal-nav">
+        <div className="cal-month">{monthLabel}</div>
+        <button className="btn btn-secondary btn-sm" onClick={goToday}>
+          오늘
+        </button>
+        <span style={{ flex: 1 }} />
+        <button className="icon-btn" onClick={() => shiftMonth(-1)} title="이전 달">
+          <Icon name="chevron-left" size={18} />
+        </button>
+        <button className="icon-btn" onClick={() => shiftMonth(1)} title="다음 달">
+          <Icon name="chevron-right" size={18} />
+        </button>
+      </div>
+
+      <div className="cal">
       <div className="cal-week head">
         {WEEKDAYS.map((w, i) => (
-          <div key={w} className={i === 0 ? "sun" : ""}>
+          <div key={w} className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>
             {w}
           </div>
         ))}
@@ -47,12 +117,20 @@ export default function CalendarView({ tasks }: { tasks: Task[] }) {
             const ds = !c.out ? dateStr(c.day) : null;
             const evs = ds ? byDate[ds] || [] : [];
             const isToday = ds === TODAY_STR;
+            const holiday = ds ? holidayName(ds) : null;
             return (
               <div
                 key={ci}
-                className={"cal-cell" + (c.out ? " out" : "") + (isToday ? " today" : "")}
+                className={
+                  "cal-cell" +
+                  (ci === 0 ? " sun" : ci === 6 ? " sat" : "") +
+                  (holiday ? " holiday" : "") +
+                  (c.out ? " out" : "") +
+                  (isToday ? " today" : "")
+                }
               >
                 <span className="dnum">{c.day}</span>
+                {holiday && <div className="cal-holiday">{holiday}</div>}
                 {evs.slice(0, 3).map((t) => (
                   <div
                     key={t.id}
@@ -68,6 +146,7 @@ export default function CalendarView({ tasks }: { tasks: Task[] }) {
           })}
         </div>
       ))}
+      </div>
     </div>
   );
 }

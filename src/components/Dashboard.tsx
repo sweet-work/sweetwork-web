@@ -1,37 +1,27 @@
 "use client";
-/* Cadence — Dashboard: D-day strip + today's tasks + team activity. */
-import type { CSSProperties } from "react";
+/* Cadence — Dashboard: today's tasks + team activity. */
 import { Icon, Avatar, StatusBadge } from "./primitives";
 import {
   members,
-  memberById,
+  personById,
   dday,
-  ddayColor,
-  ddayLabel,
-  fmtDate,
-  WEEKDAYS,
+  fmtRange,
+  taskEnd,
   TODAY_STR,
   type Task,
+  type CurrentUser,
 } from "@/lib/data";
 
-function DdayCard({ task }: { task: Task }) {
-  const diff = dday(task.date);
-  const color = ddayColor(diff);
-  return (
-    <div className="dday-card" style={{ "--bar": color } as CSSProperties}>
-      <div className="num" style={{ color }}>
-        {ddayLabel(diff)}
-      </div>
-      <div className="lab">{task.ddayLabel || task.title}</div>
-      <div className="date">
-        {task.date.replace(/-/g, ".")} ({WEEKDAYS[new Date(task.date + "T00:00:00").getDay()]})
-      </div>
-    </div>
-  );
-}
-
-export function TaskRow({ task, onToggle }: { task: Task; onToggle: (id: number) => void }) {
-  const m = memberById(task.member);
+export function TaskRow({
+  task,
+  onToggle,
+  currentUser,
+}: {
+  task: Task;
+  onToggle: (id: number) => void;
+  currentUser: CurrentUser;
+}) {
+  const m = personById(task.member, currentUser);
   const done = task.status === "done";
   return (
     <div className={"task-row" + (done ? " is-done" : "")}>
@@ -46,7 +36,7 @@ export function TaskRow({ task, onToggle }: { task: Task; onToggle: (id: number)
       <div className="right">
         {!done && <StatusBadge status={task.status} />}
         <Avatar member={m} size={24} />
-        <span className="date">{fmtDate(task.date)}</span>
+        <span className="date">{fmtRange(task.date, task.endDate)}</span>
       </div>
     </div>
   );
@@ -55,14 +45,15 @@ export function TaskRow({ task, onToggle }: { task: Task; onToggle: (id: number)
 export default function Dashboard({
   tasks,
   onToggle,
+  currentUser,
 }: {
   tasks: Task[];
   onToggle: (id: number) => void;
+  currentUser: CurrentUser;
 }) {
-  const pinned = tasks.filter((t) => t.pinned).sort((a, b) => dday(a.date) - dday(b.date));
-
   // Today's + upcoming (next 4 days), not done — the "what's live now" list.
-  const today = tasks.filter((t) => t.date === TODAY_STR);
+  // A task counts as "today" when its range spans today.
+  const today = tasks.filter((t) => t.date <= TODAY_STR && TODAY_STR <= taskEnd(t));
   const upcoming = tasks
     .filter((t) => t.date > TODAY_STR && dday(t.date) <= 4 && t.status !== "done")
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -79,16 +70,6 @@ export default function Dashboard({
 
   return (
     <div className="fade-in">
-      <div className="section-head">
-        <h2>중요 일정</h2>
-        <span className="count">D-day</span>
-      </div>
-      <div className="dday-strip">
-        {pinned.map((t) => (
-          <DdayCard key={t.id} task={t} />
-        ))}
-      </div>
-
       <div className="dash-grid">
         <div>
           <div className="section-head">
@@ -97,7 +78,7 @@ export default function Dashboard({
           </div>
           <div className="task-list">
             {today.length ? (
-              today.map((t) => <TaskRow key={t.id} task={t} onToggle={onToggle} />)
+              today.map((t) => <TaskRow key={t.id} task={t} onToggle={onToggle} currentUser={currentUser} />)
             ) : (
               <div className="task-row" style={{ color: "var(--fg-3)", justifyContent: "center" }}>
                 오늘 등록된 일감이 없어요
@@ -111,7 +92,7 @@ export default function Dashboard({
           </div>
           <div className="task-list">
             {upcoming.map((t) => (
-              <TaskRow key={t.id} task={t} onToggle={onToggle} />
+              <TaskRow key={t.id} task={t} onToggle={onToggle} currentUser={currentUser} />
             ))}
           </div>
         </div>
