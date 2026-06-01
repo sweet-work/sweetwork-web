@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, Avatar, Mark } from "./primitives";
+import TopProgressBar from "./TopProgressBar";
 import { members, TODAY_STR, type CurrentUser } from "@/lib/data";
 
 export type View = "dashboard" | "board" | "calendar" | "report";
@@ -111,6 +112,7 @@ export function TopBar({
           <Icon name="log-out" size={18} />
         </button>
       </div>
+      <TopProgressBar />
     </header>
   );
 }

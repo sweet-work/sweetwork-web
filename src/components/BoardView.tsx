@@ -1,8 +1,15 @@
 "use client";
 /* Cadence — Board view: loads team tasks from GET /todos, member filter + status columns. */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon, Avatar } from "./primitives";
-import { getTodos, updateTodoStatus, type TodoBoardItem, type TodoStatus } from "@/lib/api";
+import {
+  getTodos,
+  updateTodoStatus,
+  updateTodo,
+  deleteTodo,
+  type TodoBoardItem,
+  type TodoStatus,
+} from "@/lib/api";
 import { dday, ddayColor, ddayLabel, fmtRange, STATUS } from "@/lib/data";
 
 type Person = { id: string; name: string; initials: string; color: string };
@@ -74,13 +81,21 @@ function toBoardTask(it: TodoBoardItem): BoardTask {
 function BoardCard({
   task,
   dragging,
+  menuOpen,
   onDragStart,
   onDragEnd,
+  onToggleMenu,
+  onEdit,
+  onDelete,
 }: {
   task: BoardTask;
   dragging: boolean;
+  menuOpen: boolean;
   onDragStart: (id: number) => void;
   onDragEnd: () => void;
+  onToggleMenu: (id: number) => void;
+  onEdit: (task: BoardTask) => void;
+  onDelete: (task: BoardTask) => void;
 }) {
   const diff = dday(task.endDate ?? task.date);
   const showD = task.status !== "done" && diff <= 7;
@@ -98,6 +113,43 @@ function BoardCard({
     >
       <div className="ttop">
         <span className="ttl">{task.title}</span>
+        <div className="card-menu">
+          <button
+            className="icon-btn card-menu-btn"
+            title="일감 설정"
+            // Don't let the button start a card drag.
+            draggable={false}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMenu(task.id);
+            }}
+          >
+            <Icon name="ellipsis" size={16} />
+          </button>
+          {menuOpen && (
+            <div className="menu-pop" onMouseDown={(e) => e.stopPropagation()}>
+              <button
+                className="menu-item"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(task);
+                }}
+              >
+                <Icon name="pencil" size={15} /> 수정
+              </button>
+              <button
+                className="menu-item danger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(task);
+                }}
+              >
+                <Icon name="trash-2" size={15} /> 삭제
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <div className="tbot">
         <Avatar member={task.member} size={22} />
@@ -120,9 +172,13 @@ function BoardColumn({
   status,
   tasks,
   draggingId,
+  menuFor,
   isOver,
   onDragStartCard,
   onDragEndCard,
+  onToggleMenu,
+  onEdit,
+  onDelete,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -130,9 +186,13 @@ function BoardColumn({
   status: BoardCol;
   tasks: BoardTask[];
   draggingId: number | null;
+  menuFor: number | null;
   isOver: boolean;
   onDragStartCard: (id: number) => void;
   onDragEndCard: () => void;
+  onToggleMenu: (id: number) => void;
+  onEdit: (task: BoardTask) => void;
+  onDelete: (task: BoardTask) => void;
   onDragOver: (status: BoardCol) => void;
   onDragLeave: () => void;
   onDrop: (status: BoardCol) => void;
@@ -164,8 +224,12 @@ function BoardColumn({
             key={t.id}
             task={t}
             dragging={draggingId === t.id}
+            menuOpen={menuFor === t.id}
             onDragStart={onDragStartCard}
             onDragEnd={onDragEndCard}
+            onToggleMenu={onToggleMenu}
+            onEdit={onEdit}
+            onDelete={onDelete}
           />
         ))}
         {tasks.length === 0 && (
@@ -173,6 +237,151 @@ function BoardColumn({
             비어 있음
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Edit modal — mirrors NewTaskModal's layout, pre-filled with the task's current values.
+function EditTaskModal({
+  task,
+  onClose,
+  onSave,
+}: {
+  task: BoardTask;
+  onClose: () => void;
+  onSave: (content: string, start: string, end: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [date, setDate] = useState(task.date);
+  const [endDate, setEndDate] = useState(task.endDate ?? task.date);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  // Keep the range valid: the end never precedes the start.
+  function changeStart(v: string) {
+    setDate(v);
+    if (endDate < v) setEndDate(v);
+  }
+
+  async function save() {
+    if (saving || !title.trim()) return;
+    setSaving(true);
+    setErr("");
+    try {
+      await onSave(title.trim(), date, endDate < date ? date : endDate);
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "일감 수정에 실패했어요.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="mhead">
+          <h2>일감 수정</h2>
+          <button className="icon-btn" onClick={onClose} style={{ width: 30, height: 30, border: 0 }}>
+            <Icon name="x" size={17} />
+          </button>
+        </div>
+        <div className="mbody">
+          <div className="input">
+            <label>일감 내용</label>
+            <div className="field">
+              <Icon name="check-square" size={17} />
+              <input
+                autoFocus
+                placeholder="무엇을 진행하나요?"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && save()}
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="input">
+              <label>시작일</label>
+              <div className="field">
+                <Icon name="calendar" size={17} />
+                <input type="date" value={date} onChange={(e) => changeStart(e.target.value)} />
+              </div>
+            </div>
+            <div className="input">
+              <label>종료일</label>
+              <div className="field">
+                <Icon name="calendar" size={17} />
+                <input type="date" value={endDate} min={date} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          {err && <div className="err">{err}</div>}
+        </div>
+        <div className="mfoot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>
+            취소
+          </button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? "저장 중…" : "저장하기"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Delete confirmation — a small modal so the action isn't a one-click mistake.
+function DeleteConfirm({
+  task,
+  onClose,
+  onConfirm,
+}: {
+  task: BoardTask;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function confirm() {
+    if (busy) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await onConfirm();
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "일감 삭제에 실패했어요.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+        <div className="mhead">
+          <h2>일감 삭제</h2>
+          <button className="icon-btn" onClick={onClose} style={{ width: 30, height: 30, border: 0 }}>
+            <Icon name="x" size={17} />
+          </button>
+        </div>
+        <div className="mbody">
+          <p style={{ fontSize: 14, color: "var(--fg-2)", lineHeight: 1.5, margin: 0 }}>
+            <b style={{ color: "var(--fg-1)" }}>{task.title}</b> 일감을 삭제할까요?
+            <br />
+            삭제하면 되돌릴 수 없어요.
+          </p>
+          {err && <div className="err">{err}</div>}
+        </div>
+        <div className="mfoot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
+            취소
+          </button>
+          <button className="btn btn-danger" onClick={confirm} disabled={busy}>
+            {busy ? "삭제 중…" : "삭제하기"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -188,6 +397,21 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [overCol, setOverCol] = useState<BoardCol | null>(null);
   const [moveErr, setMoveErr] = useState("");
+  // Which card's "..." menu is open, and the task being edited / deleted.
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [editTask, setEditTask] = useState<BoardTask | null>(null);
+  const [deleteTask, setDeleteTask] = useState<BoardTask | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Close an open card menu when clicking anywhere outside it.
+  useEffect(() => {
+    if (menuFor == null) return;
+    function onDocClick() {
+      setMenuFor(null);
+    }
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [menuFor]);
 
   useEffect(() => {
     let alive = true;
@@ -228,6 +452,25 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
     });
   }
 
+  // Save an edit: PUT the new content/dates, then update the card in place.
+  async function handleEditSave(id: number, content: string, start: string, end: string) {
+    await updateTodo(id, { content, start_date: start, end_date: end });
+    setTasks((cur) =>
+      cur &&
+      cur.map((t) =>
+        t.id === id
+          ? { ...t, title: content, date: start, endDate: end > start ? end : undefined }
+          : t
+      )
+    );
+  }
+
+  // Delete a task: DELETE on the backend, then drop it from the board.
+  async function handleDeleteConfirm(id: number) {
+    await deleteTodo(id);
+    setTasks((cur) => cur && cur.filter((t) => t.id !== id));
+  }
+
   // Distinct people present on the board, for the filter chips.
   const people = useMemo(() => {
     const map = new Map<string, Person>();
@@ -241,7 +484,7 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   const shown = filter === "all" ? tasks : tasks.filter((t) => t.member.id === filter);
 
   return (
-    <div className="fade-in">
+    <div className="fade-in" ref={rootRef}>
       <div className="filter-bar">
         <button className={"chip all" + (filter === "all" ? " active" : "")} onClick={() => setFilter("all")}>
           전체
@@ -268,11 +511,21 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
             status={c}
             tasks={shown.filter((t) => t.status === c)}
             draggingId={draggingId}
+            menuFor={menuFor}
             isOver={overCol === c && draggingId != null}
             onDragStartCard={setDraggingId}
             onDragEndCard={() => {
               setDraggingId(null);
               setOverCol(null);
+            }}
+            onToggleMenu={(id) => setMenuFor((cur) => (cur === id ? null : id))}
+            onEdit={(t) => {
+              setMenuFor(null);
+              setEditTask(t);
+            }}
+            onDelete={(t) => {
+              setMenuFor(null);
+              setDeleteTask(t);
             }}
             onDragOver={setOverCol}
             onDragLeave={() => setOverCol(null)}
@@ -280,6 +533,21 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
           />
         ))}
       </div>
+
+      {editTask && (
+        <EditTaskModal
+          task={editTask}
+          onClose={() => setEditTask(null)}
+          onSave={(content, start, end) => handleEditSave(editTask.id, content, start, end)}
+        />
+      )}
+      {deleteTask && (
+        <DeleteConfirm
+          task={deleteTask}
+          onClose={() => setDeleteTask(null)}
+          onConfirm={() => handleDeleteConfirm(deleteTask.id)}
+        />
+      )}
     </div>
   );
 }
