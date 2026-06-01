@@ -158,6 +158,8 @@ button { font-family: inherit; }
 .seg button.active { background: var(--surface-1); color: var(--fg-1); box-shadow: var(--shadow-sm); }
 
 .content { padding: 24px 28px 56px; max-width: 1180px; width: 100%; }
+/* The board needs more horizontal room than other pages, so let it use a wider cap. */
+.content:has(.board) { max-width: 1480px; }
 
 /* ---------------- Section ---------------- */
 .section-head { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 14px; }
@@ -225,8 +227,9 @@ button { font-family: inherit; }
 .chip.active { border-color: var(--accent); color: var(--fg-1); background: var(--accent-soft); }
 .chip.all { padding: 5px 13px; }
 
-.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 860px) { .board { grid-template-columns: 1fr; } }
+/* 4 columns always fit the available width (minmax floor 0 ⇒ the 완료 column never gets clipped). */
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 560px) { .board { grid-template-columns: 1fr; } }
 .board-col { background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 12px; transition: background var(--dur-fast), border-color var(--dur-fast); }
 .board-col.drop-over { background: var(--surface-1); border-color: var(--accent, #3F6FE5); box-shadow: inset 0 0 0 1px var(--accent, #3F6FE5); }
 .board-col .col-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px 12px; }

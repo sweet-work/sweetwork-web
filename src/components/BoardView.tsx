@@ -3,36 +3,52 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon, Avatar } from "./primitives";
 import { getTodos, updateTodoStatus, type TodoBoardItem, type TodoStatus } from "@/lib/api";
-import { dday, ddayColor, ddayLabel, fmtRange, STATUS, type Status } from "@/lib/data";
+import { dday, ddayColor, ddayLabel, fmtRange, STATUS } from "@/lib/data";
 
 type Person = { id: string; name: string; initials: string; color: string };
+
+// The board has its own four columns (보류 = on-hold), distinct from the shared 3-state
+// `Status` used by the calendar/dashboard — so adding 보류 here doesn't ripple into those views.
+type BoardCol = "todo" | "progress" | "postponed" | "done";
 
 interface BoardTask {
   id: number;
   title: string;
   date: string;
   endDate?: string;
-  status: Status;
+  status: BoardCol;
   member: Person;
 }
 
 // Stable avatar color per user id so a person looks the same across renders.
 const AVATAR_COLORS = ["#6AA823", "#3F6FE5", "#4E9A6B", "#C2891C", "#8A8275", "#B0561F", "#7A5ACF"];
 
-// Backend status enum → the board's three columns (보류 is shown in the 예정 column).
-const COLUMN_OF: Record<string, Status> = {
+// Backend status enum → board column (one-to-one now that 보류 has its own column).
+const COLUMN_OF: Record<string, BoardCol> = {
   TODO: "todo",
-  POSTPONED: "todo",
+  POSTPONED: "postponed",
   IN_PROGRESS: "progress",
   DONE: "done",
 };
 
-// Board column → backend status to send on drop (the 예정 column maps back to TODO).
-const STATUS_OF: Record<Status, TodoStatus> = {
+// Board column → backend status to send on drop.
+const STATUS_OF: Record<BoardCol, TodoStatus> = {
   todo: "TODO",
   progress: "IN_PROGRESS",
+  postponed: "POSTPONED",
   done: "DONE",
 };
+
+// Column header meta — reuses the shared STATUS palette, plus a 보류 entry (amber/warn).
+const COL_META: Record<BoardCol, { label: string; color: string }> = {
+  todo: { label: STATUS.todo.label, color: STATUS.todo.color },
+  progress: { label: STATUS.progress.label, color: STATUS.progress.color },
+  postponed: { label: "보류", color: "var(--warn)" },
+  done: { label: STATUS.done.label, color: STATUS.done.color },
+};
+
+// Left-to-right column order on the board.
+const COLS: BoardCol[] = ["todo", "progress", "postponed", "done"];
 
 function personOf(it: TodoBoardItem): Person {
   return {
@@ -111,17 +127,17 @@ function BoardColumn({
   onDragLeave,
   onDrop,
 }: {
-  status: Status;
+  status: BoardCol;
   tasks: BoardTask[];
   draggingId: number | null;
   isOver: boolean;
   onDragStartCard: (id: number) => void;
   onDragEndCard: () => void;
-  onDragOver: (status: Status) => void;
+  onDragOver: (status: BoardCol) => void;
   onDragLeave: () => void;
-  onDrop: (status: Status) => void;
+  onDrop: (status: BoardCol) => void;
 }) {
-  const meta = STATUS[status];
+  const meta = COL_META[status];
   return (
     <div
       className={"board-col" + (isOver ? " drop-over" : "")}
@@ -170,7 +186,7 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("all");
   const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [overCol, setOverCol] = useState<Status | null>(null);
+  const [overCol, setOverCol] = useState<BoardCol | null>(null);
   const [moveErr, setMoveErr] = useState("");
 
   useEffect(() => {
@@ -191,7 +207,7 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   }, [refreshKey]);
 
   // Drop a card onto a column: optimistically move it, then PATCH the backend.
-  function handleDrop(toCol: Status) {
+  function handleDrop(toCol: BoardCol) {
     const id = draggingId;
     setDraggingId(null);
     setOverCol(null);
@@ -223,7 +239,6 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   if (!tasks) return <div className="fade-in" style={HINT_STYLE}>일감을 불러오는 중…</div>;
 
   const shown = filter === "all" ? tasks : tasks.filter((t) => t.member.id === filter);
-  const cols: Status[] = ["todo", "progress", "done"];
 
   return (
     <div className="fade-in">
@@ -247,7 +262,7 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
       )}
 
       <div className="board">
-        {cols.map((c) => (
+        {COLS.map((c) => (
           <BoardColumn
             key={c}
             status={c}
