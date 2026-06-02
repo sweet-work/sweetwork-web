@@ -198,7 +198,7 @@ export default function MemberDetail({
       <div className="section-head" style={{ marginTop: 28 }}>
         <h2>개인 주간 보고 생성</h2>
       </div>
-      <WeeklyReport tasks={mine} currentUser={currentUser} person={{ name: person.name }} />
+      <WeeklyReport userId={userId} personName={person.name} tasks={mine} currentUser={currentUser} />
     </div>
   );
 }

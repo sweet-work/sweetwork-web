@@ -361,3 +361,104 @@ export async function getWeeklyStats(userId: number): Promise<WeeklyStats> {
   if (!res.ok) throw new Error("주간 현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
   return res.json();
 }
+
+/** One task line inside an AI weekly-report section. display_date is pre-formatted (e.g. "06.02 (화)"). */
+export interface WeeklyReportSectionItem {
+  content: string;
+  memo?: string | null;
+  start_date: string;
+  end_date: string;
+  display_date: string;
+}
+
+/** A titled group of tasks within the AI weekly report. */
+export interface WeeklyReportSection {
+  title: string;
+  items: WeeklyReportSectionItem[];
+}
+
+/** One todo included in the AI weekly report (used for the count metrics). */
+export interface WeeklyReportTodo {
+  id: number;
+  content: string;
+  memo?: string | null;
+  status: string;
+  start_date: string;
+  end_date: string;
+}
+
+/** Shape returned by POST /reports/weekly — an AI-generated personal weekly report. */
+export interface WeeklyReportResponse {
+  user_id: number;
+  user_name: string;
+  week_start: string;
+  week_end: string;
+  summary: string;
+  insight: string;
+  completed_work: WeeklyReportSection;
+  next_week_plan: WeeklyReportSection;
+  todos: WeeklyReportTodo[];
+}
+
+/** POST /reports/weekly { user_id } — generates the user's AI weekly report (slow: an LLM call). */
+export async function createWeeklyReport(userId: number): Promise<WeeklyReportResponse> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/reports/weekly`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("주간 보고 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** Team report section item — like the personal one, plus the owning teammate. */
+export interface TeamWeeklyReportSectionItem extends WeeklyReportSectionItem {
+  user_id: number;
+  user_name: string;
+}
+
+/** A titled group of team tasks within the AI weekly report. */
+export interface TeamWeeklyReportSection {
+  title: string;
+  items: TeamWeeklyReportSectionItem[];
+}
+
+/** One team todo included in the report (count metrics + owner). */
+export interface TeamWeeklyReportTodo extends WeeklyReportTodo {
+  user_id: number;
+  user_name: string;
+}
+
+/** Shape returned by POST /reports/weekly/team — an AI-generated team weekly report. */
+export interface TeamWeeklyReportResponse {
+  team_id: number;
+  team_name: string;
+  week_start: string;
+  week_end: string;
+  summary: string;
+  insight: string;
+  completed_work: TeamWeeklyReportSection;
+  next_week_plan: TeamWeeklyReportSection;
+  todos: TeamWeeklyReportTodo[];
+}
+
+/** POST /reports/weekly/team { team_id } — generates the team's AI weekly report (slow: an LLM call). */
+export async function createTeamWeeklyReport(teamId: number): Promise<TeamWeeklyReportResponse> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/reports/weekly/team`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team_id: teamId }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀 주간 보고 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}

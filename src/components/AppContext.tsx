@@ -67,6 +67,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .then((list) => {
         if (!alive) return;
         setMembers(list.map((u) => memberFromUser(u.id, u.name)));
+        // Backfill the team onto sessions restored before we persisted it (every roster
+        // row carries the same team), so the team weekly report has a team_id to use.
+        if (user.teamId == null && list.length > 0) {
+          const next: CurrentUser = { ...user, teamId: list[0].team_id, teamName: list[0].team_name };
+          localStorage.setItem(USER_KEY, JSON.stringify(next));
+          setUser(next);
+        }
       })
       .catch(() => {
         if (alive) setMembers([]);
@@ -140,6 +147,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             name: data.name,
             initials: data.name.slice(0, 2).toUpperCase(),
             color: "#6AA823",
+            teamId: data.team_id ?? undefined,
+            teamName: data.team_name ?? undefined,
           };
           localStorage.setItem(USER_KEY, JSON.stringify(next));
           setUser(next);
