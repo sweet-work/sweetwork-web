@@ -1,23 +1,73 @@
 "use client";
-/* Cadence — per-member view: progress status on top, personal weekly report below. */
+/* Cadence — per-member view: progress status on top, personal weekly report below.
+   Real backend members (numeric ids) load their tasks from GET /todos?user_id=;
+   seed teammates fall back to the in-memory task list. */
+import { useEffect, useState } from "react";
 import { Avatar } from "./primitives";
 import { TaskRow } from "./Dashboard";
 import WeeklyReport from "./WeeklyReport";
-import { personById, type Task, type CurrentUser } from "@/lib/data";
+import { getTodos } from "@/lib/api";
+import { personById, type Task, type CurrentUser, type Member, type Status } from "@/lib/data";
+
+// Backend status enum → local Status (POSTPONED has no local equivalent → 예정).
+const STATUS_FROM_API: Record<string, Status> = {
+  TODO: "todo",
+  IN_PROGRESS: "progress",
+  DONE: "done",
+  POSTPONED: "todo",
+};
 
 export default function MemberDetail({
   memberId,
   tasks,
+  members,
   currentUser,
   onToggle,
 }: {
   memberId: string;
   tasks: Task[];
+  members: Member[];
   currentUser: CurrentUser;
   onToggle: (id: number) => void;
 }) {
-  const person = personById(memberId, currentUser);
-  const mine = tasks.filter((t) => t.member === memberId);
+  // Real backend members have a numeric id; seed teammates ("mk" 등) keep the local path.
+  const userId = /^\d+$/.test(memberId) ? Number(memberId) : undefined;
+  // Resolve who we're viewing: the real team roster first, then seed team / self.
+  const person = members.find((m) => m.id === memberId) ?? personById(memberId, currentUser);
+
+  // A real member's tasks come from the API (null = not yet loaded); seed members use props.
+  const [realTasks, setRealTasks] = useState<Task[] | null>(null);
+  useEffect(() => {
+    if (userId == null) {
+      setRealTasks(null);
+      return;
+    }
+    let alive = true;
+    getTodos(userId)
+      .then((board) => {
+        if (!alive) return;
+        const all = [...board.TODO, ...board.IN_PROGRESS, ...board.DONE, ...board.POSTPONED];
+        setRealTasks(
+          all.map((it) => ({
+            id: it.id,
+            title: it.content,
+            member: memberId,
+            date: it.start_date,
+            endDate: it.end_date > it.start_date ? it.end_date : undefined,
+            status: STATUS_FROM_API[it.status] ?? "todo",
+            pinned: false,
+          }))
+        );
+      })
+      .catch(() => {
+        if (alive) setRealTasks([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId, memberId]);
+
+  const mine = userId != null ? realTasks ?? [] : tasks.filter((t) => t.member === memberId);
 
   if (!person) {
     return (
