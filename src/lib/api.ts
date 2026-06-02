@@ -335,3 +335,27 @@ export async function deleteChecklist(todoId: number, checklistId: number): Prom
   }
   if (!res.ok) throw new Error("체크리스트 삭제에 실패했어요. 잠시 후 다시 시도해 주세요.");
 }
+
+/** Shape returned by GET /reports/weekly — one user's this-week task counts.
+    week_start/end are Asia/Seoul Monday~Sunday. */
+export interface WeeklyStats {
+  user_id: number;
+  user_name: string;
+  week_start: string;
+  week_end: string;
+  completed_count: number;
+  in_progress_count: number;
+  planned_count: number;
+}
+
+/** GET /reports/weekly?user_id= — the user's completed/in-progress/planned counts this week. */
+export async function getWeeklyStats(userId: number): Promise<WeeklyStats> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/reports/weekly?user_id=${userId}`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("주간 현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}

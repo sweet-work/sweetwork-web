@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Avatar } from "./primitives";
 import { TaskRow } from "./Dashboard";
 import WeeklyReport from "./WeeklyReport";
-import { getTodos } from "@/lib/api";
+import { getTodos, getWeeklyStats, type WeeklyStats } from "@/lib/api";
 import { personById, type Task, type CurrentUser, type Member, type Status } from "@/lib/data";
 
 // Backend status enum → local Status (POSTPONED has no local equivalent → 예정).
@@ -16,6 +16,9 @@ const STATUS_FROM_API: Record<string, Status> = {
   DONE: "done",
   POSTPONED: "todo",
 };
+
+// "2026-06-01" → "2026.06.01" for the week-range label.
+const ymd = (s: string) => s.replaceAll("-", ".");
 
 export default function MemberDetail({
   memberId,
@@ -67,6 +70,26 @@ export default function MemberDetail({
     };
   }, [userId, memberId]);
 
+  // This-week task counts for a real member (GET /reports/weekly). null until loaded.
+  const [stats, setStats] = useState<WeeklyStats | null>(null);
+  useEffect(() => {
+    if (userId == null) {
+      setStats(null);
+      return;
+    }
+    let alive = true;
+    getWeeklyStats(userId)
+      .then((s) => {
+        if (alive) setStats(s);
+      })
+      .catch(() => {
+        if (alive) setStats(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+
   const mine = userId != null ? realTasks ?? [] : tasks.filter((t) => t.member === memberId);
 
   if (!person) {
@@ -84,7 +107,13 @@ export default function MemberDetail({
   const todo = mine.filter((t) => t.status === "todo");
   const total = mine.length;
   const pct = total ? Math.round((done.length / total) * 100) : 0;
-  const w = (n: number) => (total ? (n / total) * 100 : 0) + "%";
+
+  // 이번 주 진행 상태 패널: 실 사용자는 주간 통계 API, 시드 팀원은 보유 일감에서 계산.
+  const cDone = stats ? stats.completed_count : done.length;
+  const cProg = stats ? stats.in_progress_count : prog.length;
+  const cTodo = stats ? stats.planned_count : todo.length;
+  const cTotal = cDone + cProg + cTodo;
+  const w = (n: number) => (cTotal ? (n / cTotal) * 100 : 0) + "%";
 
   // Show what's live first: not-done before done, earlier dates first.
   const ordered = [...mine].sort(
@@ -104,36 +133,38 @@ export default function MemberDetail({
         </div>
       </div>
 
-      {/* ── 진행 상태 ── */}
+      {/* ── 이번 주 진행 상태 (GET /reports/weekly) ── */}
       <div className="section-head">
-        <h2>진행 상태</h2>
-        <span className="count">{total}건</span>
+        <h2>이번 주 진행 상태</h2>
+        <span className="count">
+          {stats ? `${ymd(stats.week_start)} – ${ymd(stats.week_end)}` : `${cTotal}건`}
+        </span>
       </div>
       <div className="panel">
         <div className="report-metrics" style={{ margin: "2px 0 16px" }}>
           <div className="metric">
             <div className="v" style={{ color: "var(--status-done)" }}>
-              {done.length}
+              {cDone}
             </div>
             <div className="l">완료</div>
           </div>
           <div className="metric">
             <div className="v" style={{ color: "var(--status-progress)" }}>
-              {prog.length}
+              {cProg}
             </div>
             <div className="l">진행 중</div>
           </div>
           <div className="metric">
             <div className="v" style={{ color: "var(--status-todo)" }}>
-              {todo.length}
+              {cTodo}
             </div>
             <div className="l">예정</div>
           </div>
         </div>
         <span className="bar-track" style={{ height: 9 }}>
-          <i style={{ width: w(done.length), background: "var(--status-done)" }} />
-          <i style={{ width: w(prog.length), background: "var(--status-progress)" }} />
-          <i style={{ width: w(todo.length), background: "var(--status-todo)" }} />
+          <i style={{ width: w(cDone), background: "var(--status-done)" }} />
+          <i style={{ width: w(cProg), background: "var(--status-progress)" }} />
+          <i style={{ width: w(cTodo), background: "var(--status-todo)" }} />
         </span>
       </div>
 
