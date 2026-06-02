@@ -281,6 +281,78 @@ button { font-family: inherit; }
 .menu-item.danger .ic { color: var(--danger); }
 .menu-item.danger:hover { background: var(--danger-soft); }
 
+/* Card content meta: thin checklist progress bar + a memo dot, sits under the title */
+.t-card .card-meta { display: flex; align-items: center; gap: 9px; }
+.t-card .meta-ic { width: 13px; height: 13px; color: var(--fg-3); flex: none; }
+.t-card .mini-bar { flex: 1; height: 5px; min-width: 0; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.t-card .mini-bar > span { display: block; height: 100%; background: var(--status-progress); border-radius: var(--radius-pill); transition: width var(--dur-base) var(--ease-out); }
+.t-card .mini-bar.done > span { background: var(--status-done); }
+.t-card .mini-count { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--fg-3); }
+
+/* ---------------- Task detail modal ---------------- */
+.detail-modal { max-width: 480px; }
+.detail-modal .mbody { gap: 16px; }
+/* Hero header — title leads, generic "일감 상세" demoted to a small eyebrow. */
+.dt-head { align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.dt-head-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.dt-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--fg-3);
+}
+.dt-head .dt-title {
+  font-size: 20px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em;
+  margin: 0; color: var(--fg-1); word-break: break-word;
+}
+.dt-head-actions { display: flex; gap: 2px; flex: none; margin-top: 2px; }
+.dt-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.dt-owner { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 550; color: var(--fg-2); }
+.dt-date { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+.dt-date .ic { width: 13px; height: 13px; color: var(--fg-3); }
+
+/* Each section is set off by a hairline, centered in the gutter above it. */
+.dt-section { display: flex; flex-direction: column; gap: 9px; border-top: 1px solid var(--border-subtle); padding-top: 16px; }
+.dt-section-head { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--fg-2); }
+.dt-section-head .ic { color: var(--fg-3); }
+.dt-count { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; color: var(--fg-3); margin-left: 2px; }
+
+.dt-memo {
+  width: 100%; min-height: 88px; resize: vertical; box-sizing: border-box;
+  /* Sunken "paper well" — the app's canonical input surface + a soft hairline. */
+  background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: 11px 13px; font-family: var(--font-sans); font-size: 13.5px; line-height: 1.6; color: var(--fg-1);
+  transition: background var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.dt-memo::placeholder { color: var(--fg-3); }
+/* On focus the paper lifts forward (white surface) with the accent ring. */
+.dt-memo:focus {
+  outline: none; background: var(--surface-1);
+  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.dt-progress { height: 5px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.dt-progress span { display: block; height: 100%; background: var(--status-done); border-radius: var(--radius-pill); transition: width var(--dur-base) var(--ease-out); }
+
+.dt-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dt-checklist li { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 0; border-radius: var(--radius-sm); }
+.dt-checklist li:hover { background: var(--surface-2); }
+.dt-check { display: inline-flex; flex: none; border: 0; background: transparent; cursor: pointer; padding: 0; color: var(--fg-3); }
+.dt-checklist li.done .dt-check { color: var(--status-done); }
+.dt-item-text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--fg-1); }
+.dt-checklist li.done .dt-item-text { color: var(--fg-3); text-decoration: line-through; }
+.dt-remove { flex: none; border: 0; background: transparent; cursor: pointer; padding: 2px; color: var(--fg-3); opacity: 0; transition: opacity var(--dur-fast); border-radius: var(--radius-sm); }
+.dt-checklist li:hover .dt-remove { opacity: 0.7; }
+.dt-remove:hover { opacity: 1; color: var(--danger); background: var(--danger-soft); }
+
+.dt-add { display: flex; align-items: center; gap: 7px; padding: 4px 0; border-top: 1px dashed var(--border-subtle); margin-top: 2px; }
+.dt-add .ic { color: var(--fg-3); flex: none; }
+.dt-add input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 13.5px; color: var(--fg-1); padding: 4px 0; }
+.dt-add input::placeholder { color: var(--fg-3); }
+.dt-add input:focus { outline: none; }
+
+.btn.danger-text { color: var(--danger); display: inline-flex; align-items: center; gap: 6px; }
+.btn.danger-text .ic { color: var(--danger); }
+.btn.danger-text:hover { background: var(--danger-soft); }
+
 /* ---------------- Calendar view ---------------- */
 .cal-nav { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; }
 .cal-nav .cal-month { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }

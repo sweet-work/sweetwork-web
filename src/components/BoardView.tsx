@@ -11,6 +11,14 @@ import {
   type TodoStatus,
 } from "@/lib/api";
 import { dday, ddayColor, ddayLabel, fmtRange, STATUS } from "@/lib/data";
+import {
+  loadDetail,
+  saveDetail,
+  clearDetail,
+  checklistProgress,
+  newItemId,
+  type TaskDetail,
+} from "@/lib/taskDetail";
 
 type Person = { id: string; name: string; initials: string; color: string };
 
@@ -80,8 +88,10 @@ function toBoardTask(it: TodoBoardItem): BoardTask {
 
 function BoardCard({
   task,
+  detail,
   dragging,
   menuOpen,
+  onOpen,
   onDragStart,
   onDragEnd,
   onToggleMenu,
@@ -89,8 +99,10 @@ function BoardCard({
   onDelete,
 }: {
   task: BoardTask;
+  detail?: TaskDetail;
   dragging: boolean;
   menuOpen: boolean;
+  onOpen: (task: BoardTask) => void;
   onDragStart: (id: number) => void;
   onDragEnd: () => void;
   onToggleMenu: (id: number) => void;
@@ -99,10 +111,15 @@ function BoardCard({
 }) {
   const diff = dday(task.endDate ?? task.date);
   const showD = task.status !== "done" && diff <= 7;
+  // Card-level signals from the (locally stored) detail: checklist progress + a memo dot.
+  const prog = detail ? checklistProgress(detail) : { done: 0, total: 0 };
+  const hasMemo = !!detail?.memo;
   return (
     <div
       className={"t-card" + (dragging ? " dragging" : "")}
       draggable
+      // A real drag suppresses the click, so a plain click opens the detail.
+      onClick={() => onOpen(task)}
       onDragStart={(e) => {
         // Carry the task id so the drop target knows what moved (and enable the move cursor).
         e.dataTransfer.setData("text/plain", String(task.id));
@@ -151,6 +168,21 @@ function BoardCard({
           )}
         </div>
       </div>
+      {/* Content meta — thin checklist progress bar + a memo dot. Only renders when
+          there's a checklist or memo, so plain cards stay a tidy two rows. */}
+      {(prog.total > 0 || hasMemo) && (
+        <div className="card-meta">
+          {prog.total > 0 && (
+            <>
+              <span className={"mini-bar" + (prog.done === prog.total ? " done" : "")}>
+                <span style={{ width: `${(prog.done / prog.total) * 100}%` }} />
+              </span>
+              <span className="mini-count">{prog.done}/{prog.total}</span>
+            </>
+          )}
+          {hasMemo && <Icon name="align-left" size={13} className="meta-ic" />}
+        </div>
+      )}
       <div className="tbot">
         <Avatar member={task.member} size={22} />
         <span className="date">
@@ -171,9 +203,11 @@ function BoardCard({
 function BoardColumn({
   status,
   tasks,
+  details,
   draggingId,
   menuFor,
   isOver,
+  onOpen,
   onDragStartCard,
   onDragEndCard,
   onToggleMenu,
@@ -185,9 +219,11 @@ function BoardColumn({
 }: {
   status: BoardCol;
   tasks: BoardTask[];
+  details: Record<number, TaskDetail>;
   draggingId: number | null;
   menuFor: number | null;
   isOver: boolean;
+  onOpen: (task: BoardTask) => void;
   onDragStartCard: (id: number) => void;
   onDragEndCard: () => void;
   onToggleMenu: (id: number) => void;
@@ -223,8 +259,10 @@ function BoardColumn({
           <BoardCard
             key={t.id}
             task={t}
+            detail={details[t.id]}
             dragging={draggingId === t.id}
             menuOpen={menuFor === t.id}
+            onOpen={onOpen}
             onDragStart={onDragStartCard}
             onDragEnd={onDragEndCard}
             onToggleMenu={onToggleMenu}
@@ -296,7 +334,11 @@ function EditTaskModal({
                 placeholder="무엇을 진행하나요?"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && save()}
+                // Skip the Enter that commits an in-progress Korean IME composition.
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === "Enter") save();
+                }}
               />
             </div>
           </div>
@@ -387,6 +429,153 @@ function DeleteConfirm({
   );
 }
 
+// Detail modal — opens on a card click. Title/dates are edited via the ✎ (reuses
+// EditTaskModal); the memo + checklist live here and persist to localStorage.
+function TaskDetailModal({
+  task,
+  detail,
+  onClose,
+  onChange,
+  onEdit,
+  onDelete,
+}: {
+  task: BoardTask;
+  detail: TaskDetail;
+  onClose: () => void;
+  onChange: (next: TaskDetail) => void;
+  onEdit: (task: BoardTask) => void;
+  onDelete: (task: BoardTask) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const meta = COL_META[task.status];
+  const diff = dday(task.endDate ?? task.date);
+  const prog = checklistProgress(detail);
+
+  // Every mutation goes through here so the parent map + localStorage stay in sync.
+  function setMemo(memo: string) {
+    onChange({ ...detail, memo });
+  }
+  function addItem() {
+    const text = draft.trim();
+    if (!text) return;
+    onChange({ ...detail, checklist: [...detail.checklist, { id: newItemId(), text, done: false }] });
+    setDraft("");
+  }
+  function toggleItem(id: string) {
+    onChange({
+      ...detail,
+      checklist: detail.checklist.map((c) => (c.id === id ? { ...c, done: !c.done } : c)),
+    });
+  }
+  function removeItem(id: string) {
+    onChange({ ...detail, checklist: detail.checklist.filter((c) => c.id !== id) });
+  }
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal detail-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Hero header — the task title is the headline; the ✎/✕ actions sit top-right. */}
+        <div className="mhead dt-head">
+          <div className="dt-head-text">
+            <span className="dt-eyebrow">일감 상세</span>
+            <h2 className="dt-title">{task.title}</h2>
+          </div>
+          <div className="dt-head-actions">
+            <button className="icon-btn" title="제목·일정 수정" onClick={() => onEdit(task)} style={{ width: 30, height: 30, border: 0 }}>
+              <Icon name="pencil" size={16} />
+            </button>
+            <button className="icon-btn" onClick={onClose} style={{ width: 30, height: 30, border: 0 }}>
+              <Icon name="x" size={17} />
+            </button>
+          </div>
+        </div>
+        <div className="mbody">
+          {/* Status / owner / schedule summary (title now lives in the hero header) */}
+          <div className="dt-meta">
+            <span className="badge" style={{ background: meta.color + "1f", color: meta.color }}>
+              <span className="dot" style={{ background: meta.color }} />
+              {meta.label}
+            </span>
+            <span className="dt-owner">
+              <Avatar member={task.member} size={20} /> {task.member.name}
+            </span>
+            <span className="dt-date">
+              <Icon name="calendar" size={13} />
+              {fmtRange(task.date, task.endDate)}
+            </span>
+            {task.status !== "done" && (
+              <span className="dday-chip" style={{ background: ddayColor(diff) }}>
+                {ddayLabel(diff)}
+              </span>
+            )}
+          </div>
+
+          {/* Free-text memo */}
+          <div className="dt-section">
+            <div className="dt-section-head">
+              <Icon name="align-left" size={15} /> 메모
+            </div>
+            <textarea
+              className="dt-memo"
+              placeholder="진행 상황이나 참고할 내용을 자유롭게 적어요…"
+              value={detail.memo}
+              onChange={(e) => setMemo(e.target.value)}
+            />
+          </div>
+
+          {/* Checklist of sub-tasks */}
+          <div className="dt-section">
+            <div className="dt-section-head">
+              <Icon name="check-square" size={15} /> 체크리스트
+              {prog.total > 0 && <span className="dt-count">{prog.done}/{prog.total}</span>}
+            </div>
+            {prog.total > 0 && (
+              <div className="dt-progress">
+                <span style={{ width: `${(prog.done / prog.total) * 100}%` }} />
+              </div>
+            )}
+            <ul className="dt-checklist">
+              {detail.checklist.map((c) => (
+                <li key={c.id} className={c.done ? "done" : ""}>
+                  <button className="dt-check" onClick={() => toggleItem(c.id)}>
+                    <Icon name={c.done ? "check-square" : "square"} size={17} />
+                  </button>
+                  <span className="dt-item-text">{c.text}</span>
+                  <button className="dt-remove" title="항목 삭제" onClick={() => removeItem(c.id)}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="dt-add">
+              <Icon name="plus" size={15} />
+              <input
+                placeholder="여기에 추가 항목을 입력해주세요"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                // Ignore the Enter that commits a Korean IME composition, else the just-
+                // committed last char leaks into the next item.
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === "Enter") addItem();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="mfoot" style={{ justifyContent: "space-between" }}>
+          <button className="btn btn-ghost danger-text" onClick={() => onDelete(task)}>
+            <Icon name="trash-2" size={15} /> 삭제
+          </button>
+          <button className="btn btn-primary" onClick={onClose}>
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const HINT_STYLE = { fontSize: 13, color: "var(--fg-3)", padding: "40px 4px", textAlign: "center" } as const;
 
 // refreshKey changes whenever a task is added so the board reloads fresh server data.
@@ -401,6 +590,9 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [editTask, setEditTask] = useState<BoardTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<BoardTask | null>(null);
+  // Locally-stored memo + checklist per task id, and the task whose detail is open.
+  const [details, setDetails] = useState<Record<number, TaskDetail>>({});
+  const [detailId, setDetailId] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Close an open card menu when clicking anywhere outside it.
@@ -421,6 +613,12 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
         if (!alive) return;
         const all = [...res.TODO, ...res.IN_PROGRESS, ...res.DONE, ...res.POSTPONED];
         setTasks(all.map(toBoardTask));
+        // Hydrate each task's locally-stored memo + checklist for the card badges.
+        const map: Record<number, TaskDetail> = {};
+        all.forEach((it) => {
+          map[it.id] = loadDetail(it.id);
+        });
+        setDetails(map);
       })
       .catch((e) => {
         if (alive) setErr(e instanceof Error ? e.message : "일감을 불러오지 못했어요.");
@@ -465,10 +663,22 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
     );
   }
 
-  // Delete a task: DELETE on the backend, then drop it from the board.
+  // Delete a task: DELETE on the backend, then drop it (and its stored detail) from the board.
   async function handleDeleteConfirm(id: number) {
     await deleteTodo(id);
+    clearDetail(id);
     setTasks((cur) => cur && cur.filter((t) => t.id !== id));
+    setDetails((cur) => {
+      const next = { ...cur };
+      delete next[id];
+      return next;
+    });
+  }
+
+  // Persist a task's detail (memo/checklist) to localStorage and the in-memory map.
+  function handleDetailChange(id: number, next: TaskDetail) {
+    saveDetail(id, next);
+    setDetails((cur) => ({ ...cur, [id]: next }));
   }
 
   // Distinct people present on the board, for the filter chips.
@@ -510,9 +720,11 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
             key={c}
             status={c}
             tasks={shown.filter((t) => t.status === c)}
+            details={details}
             draggingId={draggingId}
             menuFor={menuFor}
             isOver={overCol === c && draggingId != null}
+            onOpen={(t) => setDetailId(t.id)}
             onDragStartCard={setDraggingId}
             onDragEndCard={() => {
               setDraggingId(null);
@@ -533,6 +745,20 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
           />
         ))}
       </div>
+
+      {detailId != null && tasks.find((t) => t.id === detailId) && (
+        <TaskDetailModal
+          task={tasks.find((t) => t.id === detailId)!}
+          detail={details[detailId] ?? { memo: "", checklist: [] }}
+          onClose={() => setDetailId(null)}
+          onChange={(next) => handleDetailChange(detailId, next)}
+          onEdit={(t) => setEditTask(t)}
+          onDelete={(t) => {
+            setDetailId(null);
+            setDeleteTask(t);
+          }}
+        />
+      )}
 
       {editTask && (
         <EditTaskModal
