@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, Avatar, Mark } from "./primitives";
 import TopProgressBar from "./TopProgressBar";
-import { members, personById, TODAY_STR, type CurrentUser } from "@/lib/data";
+import { personById, TODAY_STR, type CurrentUser, type Member } from "@/lib/data";
 
 export type View = "dashboard" | "board" | "calendar" | "report";
 
@@ -22,7 +22,7 @@ export function viewFromPath(pathname: string): View {
   return (NAV.some((n) => n.id === seg) ? seg : "dashboard") as View;
 }
 
-export function Sidebar({ currentUser }: { currentUser: CurrentUser }) {
+export function Sidebar({ currentUser, members }: { currentUser: CurrentUser; members: Member[] }) {
   const pathname = usePathname();
   const active = viewFromPath(pathname);
   const activeMember = pathname.startsWith("/member/") ? pathname.split("/")[2] : null;
@@ -46,16 +46,22 @@ export function Sidebar({ currentUser }: { currentUser: CurrentUser }) {
 
       <div className="nav-label">우리 팀</div>
       <div className="member-list">
-        {members.map((m) => (
-          <Link
-            key={m.id}
-            href={`/member/${m.id}`}
-            className={"member-row" + (activeMember === m.id ? " active" : "")}
-          >
-            <Avatar member={m} size={22} />
-            {m.name}
-          </Link>
-        ))}
+        {members.length === 0 ? (
+          <div className="member-row" style={{ color: "var(--fg-3)", cursor: "default", fontSize: 13 }}>
+            함께하는 팀원이 없어요
+          </div>
+        ) : (
+          members.map((m) => (
+            <Link
+              key={m.id}
+              href={`/member/${m.id}`}
+              className={"member-row" + (activeMember === m.id ? " active" : "")}
+            >
+              <Avatar member={m} size={22} />
+              {m.name}
+            </Link>
+          ))
+        )}
       </div>
 
       <div className="spacer" />

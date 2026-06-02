@@ -77,6 +77,27 @@ export async function createTeam(name: string): Promise<Team> {
   return res.json();
 }
 
+/** A teammate as returned by GET /teams/members. */
+export interface TeamMember {
+  id: number;
+  email: string;
+  name: string;
+  team_id: number;
+  team_name: string;
+}
+
+/** GET /teams/members?user_id= — the members sharing the given user's team. */
+export async function getMyTeamMembers(userId: number): Promise<TeamMember[]> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/teams/members?user_id=${userId}`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀원 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
 /** POST /login with { email }. Returns null when the email is unknown (HTTP 401). */
 export async function login(email: string): Promise<AuthResponse | null> {
   let res: Response;
