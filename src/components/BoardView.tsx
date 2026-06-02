@@ -621,7 +621,14 @@ function TaskDetailModal({
 const HINT_STYLE = { fontSize: 13, color: "var(--fg-3)", padding: "40px 4px", textAlign: "center" } as const;
 
 // refreshKey changes whenever a task is added so the board reloads fresh server data.
-export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
+// loginUserId scopes the board to the signed-in user's team (GET /todos?login_user_id=).
+export default function BoardView({
+  refreshKey = 0,
+  loginUserId,
+}: {
+  refreshKey?: number;
+  loginUserId: string;
+}) {
   const [tasks, setTasks] = useState<BoardTask[] | null>(null);
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("all");
@@ -652,7 +659,7 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   useEffect(() => {
     let alive = true;
     setErr("");
-    getTodos()
+    getTodos(Number(loginUserId))
       .then((res) => {
         if (!alive) return;
         const all = [...res.TODO, ...res.IN_PROGRESS, ...res.DONE, ...res.POSTPONED];
@@ -680,7 +687,7 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
     return () => {
       alive = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, loginUserId]);
 
   // Drop a card onto a column: optimistically move it, then PATCH the backend.
   function handleDrop(toCol: BoardCol) {

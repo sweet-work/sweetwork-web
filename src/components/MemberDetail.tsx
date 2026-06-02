@@ -46,7 +46,8 @@ export default function MemberDetail({
       return;
     }
     let alive = true;
-    getTodos(userId)
+    // login_user_id = the signed-in user (team scope); user_id = the teammate we're viewing.
+    getTodos(Number(currentUser.id), userId)
       .then((board) => {
         if (!alive) return;
         const all = [...board.TODO, ...board.IN_PROGRESS, ...board.DONE, ...board.POSTPONED];
@@ -68,7 +69,7 @@ export default function MemberDetail({
     return () => {
       alive = false;
     };
-  }, [userId, memberId]);
+  }, [userId, memberId, currentUser.id]);
 
   // This-week task counts for a real member (GET /reports/weekly). null until loaded.
   const [stats, setStats] = useState<WeeklyStats | null>(null);
@@ -115,8 +116,17 @@ export default function MemberDetail({
   const cTotal = cDone + cProg + cTodo;
   const w = (n: number) => (cTotal ? (n / cTotal) * 100 : 0) + "%";
 
+  // 금주 담당 일감: 주간 통계의 주(월~일)와 겹치는 일감만. stats가 없으면(시드/로딩) 전체.
+  const weekTasks = stats
+    ? mine.filter((t) => {
+        const start = t.date;
+        const end = t.endDate ?? t.date;
+        return start <= stats.week_end && end >= stats.week_start;
+      })
+    : mine;
+
   // Show what's live first: not-done before done, earlier dates first.
-  const ordered = [...mine].sort(
+  const ordered = [...weekTasks].sort(
     (a, b) =>
       Number(a.status === "done") - Number(b.status === "done") || a.date.localeCompare(b.date)
   );
@@ -170,6 +180,7 @@ export default function MemberDetail({
 
       <div className="section-head" style={{ marginTop: 24 }}>
         <h2>금주 담당 일감</h2>
+        <span className="count">{ordered.length}건</span>
       </div>
       <div className="task-list">
         {ordered.length ? (

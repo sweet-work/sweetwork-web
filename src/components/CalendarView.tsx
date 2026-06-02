@@ -66,7 +66,13 @@ function DdayCard({ item }: { item: TodoCalendarItem }) {
 const IMPORTANT_LIMIT = 6;
 
 // refreshKey changes whenever a task is added so the views reload fresh server data.
-export default function CalendarView({ refreshKey = 0 }: { refreshKey?: number }) {
+export default function CalendarView({
+  refreshKey = 0,
+  loginUserId,
+}: {
+  refreshKey?: number;
+  loginUserId: string;
+}) {
   // Displayed month; starts on the real "today".
   const [cursor, setCursor] = useState({ year: TODAY.getFullYear(), month: TODAY.getMonth() });
   const { year, month } = cursor;
@@ -80,7 +86,7 @@ export default function CalendarView({ refreshKey = 0 }: { refreshKey?: number }
 
   useEffect(() => {
     let alive = true;
-    getTodos()
+    getTodos(Number(loginUserId))
       .then((res) => {
         if (!alive) return;
         // Active (not done / not on-hold) tasks whose deadline is today or later, soonest first.
@@ -96,7 +102,7 @@ export default function CalendarView({ refreshKey = 0 }: { refreshKey?: number }
     return () => {
       alive = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, loginUserId]);
 
   useEffect(() => {
     let alive = true;

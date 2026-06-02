@@ -4,6 +4,6 @@ import { useApp } from "@/components/AppContext";
 
 export default function CalendarPage() {
   // tasks.length bumps when a task is added, telling the calendar to reload from the API.
-  const { tasks } = useApp();
-  return <CalendarView refreshKey={tasks.length} />;
+  const { tasks, currentUser } = useApp();
+  return <CalendarView refreshKey={tasks.length} loginUserId={currentUser.id} />;
 }

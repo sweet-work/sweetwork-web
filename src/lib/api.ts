@@ -184,12 +184,14 @@ export interface TodoBoardResponse {
   POSTPONED: TodoBoardItem[];
 }
 
-/** GET /todos — kanban board. Pass userId to scope to one user; omit for the whole team. */
-export async function getTodos(userId?: number): Promise<TodoBoardResponse> {
-  const qs = userId == null ? "" : `?user_id=${userId}`;
+/** GET /todos — kanban board for the logged-in user's team.
+    loginUserId(필수)로 같은 팀 일감만 조회하고, userId를 주면 그 팀원 일감만 좁혀서 조회. */
+export async function getTodos(loginUserId: number, userId?: number): Promise<TodoBoardResponse> {
+  const params = new URLSearchParams({ login_user_id: String(loginUserId) });
+  if (userId != null) params.set("user_id", String(userId));
   let res: Response;
   try {
-    res = await apiFetch(`${API_BASE}/todos${qs}`);
+    res = await apiFetch(`${API_BASE}/todos?${params.toString()}`);
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
   }
