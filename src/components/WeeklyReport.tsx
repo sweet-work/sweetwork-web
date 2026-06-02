@@ -39,7 +39,16 @@ function Section({
   );
 }
 
-export default function WeeklyReport({ tasks, currentUser }: { tasks: Task[]; currentUser: CurrentUser }) {
+export default function WeeklyReport({
+  tasks,
+  currentUser,
+  person,
+}: {
+  tasks: Task[];
+  currentUser: CurrentUser;
+  // When set, the report is scoped to one teammate instead of the whole team.
+  person?: { name: string };
+}) {
   const [state, setState] = useState<ReportState>("empty");
 
   const done = tasks.filter((t) => t.status === "done");
@@ -59,9 +68,11 @@ export default function WeeklyReport({ tasks, currentUser }: { tasks: Task[]; cu
             <div className="ic-wrap">
               <Icon name="sparkles" size={26} />
             </div>
-            <h2>이번 주 업무를 보고서로 정리해 드려요</h2>
+            <h2>
+              {person ? `${person.name}님의 이번 주 업무를 정리해 드려요` : "이번 주 업무를 보고서로 정리해 드려요"}
+            </h2>
             <p>
-              등록된 일감을 바탕으로 완료·진행·다음 주 계획을
+              {person ? `${person.name}님이 맡은 일감을` : "등록된 일감을"} 바탕으로 완료·진행·다음 주 계획을
               <br />
               정해진 양식에 맞춰 자동으로 작성합니다.
             </p>
@@ -87,11 +98,13 @@ export default function WeeklyReport({ tasks, currentUser }: { tasks: Task[]; cu
       <div className="report-card">
         <div className="rhead">
           <span className="pill">
-            <Icon name="sparkles" size={13} /> AI 주간 보고
+            <Icon name="sparkles" size={13} /> {person ? "AI 개인 주간 보고" : "AI 주간 보고"}
           </span>
         </div>
-        <h1>이번 주 팀 업무 요약</h1>
-        <div className="rmeta">2026.05.05 — 2026.05.11 · 5명 · 일감 {tasks.length}건</div>
+        <h1>{person ? `${person.name}님의 이번 주 업무 요약` : "이번 주 팀 업무 요약"}</h1>
+        <div className="rmeta">
+          2026.05.05 — 2026.05.11 · {person ? "" : "5명 · "}일감 {tasks.length}건
+        </div>
 
         <div className="report-metrics">
           <div className="metric">
@@ -115,8 +128,18 @@ export default function WeeklyReport({ tasks, currentUser }: { tasks: Task[]; cu
         </div>
 
         <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--fg-1)", margin: "0 0 4px" }}>
-          이번 주, 팀은 총 <b>{tasks.length}개</b>의 일감을 다뤘고 그중 <b>{done.length}개</b>를 완료했어요. 결제
-          모듈과 배포 작업이 중심이었고, 다음 주에는 분기 보고서 제출과 보안 점검이 예정되어 있어요.
+          {person ? (
+            <>
+              {person.name}님은 이번 주 총 <b>{tasks.length}개</b>의 일감을 맡았고 그중 <b>{done.length}개</b>를
+              완료했어요. 현재 <b>{prog.length}개</b>를 진행 중이며, <b>{todo.length}개</b>가 다음 주 계획으로 남아
+              있어요.
+            </>
+          ) : (
+            <>
+              이번 주, 팀은 총 <b>{tasks.length}개</b>의 일감을 다뤘고 그중 <b>{done.length}개</b>를 완료했어요. 결제
+              모듈과 배포 작업이 중심이었고, 다음 주에는 분기 보고서 제출과 보안 점검이 예정되어 있어요.
+            </>
+          )}
         </p>
 
         <Section title="이번 주 완료한 일" items={done} color="var(--status-done)" currentUser={currentUser} />

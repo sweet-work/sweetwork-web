@@ -57,14 +57,14 @@ export async function login(email: string): Promise<AuthResponse | null> {
   return res.json();
 }
 
-/** POST /signup with { email, name }. */
-export async function signup(email: string, name: string): Promise<AuthResponse> {
+/** POST /signup with { email, name }. An optional team is sent along for the user's profile. */
+export async function signup(email: string, name: string, team?: string): Promise<AuthResponse> {
   let res: Response;
   try {
     res = await apiFetch(`${API_BASE}/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify(team ? { email, name, team } : { email, name }),
     });
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
