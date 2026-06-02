@@ -368,6 +368,38 @@ export async function getWeeklyStats(userId: number): Promise<WeeklyStats> {
   return res.json();
 }
 
+/** One task overlapping this week, as returned by GET /reports/weekly/todos. */
+export interface WeeklyReportTodo {
+  id: number;
+  content: string;
+  memo?: string | null;
+  status: string;
+  start_date: string;
+  end_date: string;
+}
+
+/** GET /reports/weekly/todos response — this-week tasks (all statuses) for one user.
+    week_start/end are Asia/Seoul Monday~Sunday. */
+export interface WeeklyReportTodosResponse {
+  user_id: number;
+  user_name: string;
+  week_start: string;
+  week_end: string;
+  todos: WeeklyReportTodo[];
+}
+
+/** GET /reports/weekly/todos?user_id= — 이번 주(월~일)와 겹치는 모든 상태의 담당 일감. */
+export async function getWeeklyReportTodos(userId: number): Promise<WeeklyReportTodosResponse> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/reports/weekly/todos?user_id=${userId}`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("금주 담당 일감을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
 /** One task line inside an AI weekly-report section. display_date is pre-formatted (e.g. "06.02 (화)"). */
 export interface WeeklyReportSectionItem {
   content: string;
