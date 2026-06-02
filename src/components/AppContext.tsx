@@ -3,11 +3,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Login from "./Login";
 import { Sidebar, TopBar, NewTaskModal, type NewTaskInput } from "./AppShell";
-import { createTodo } from "@/lib/api";
-import { tasks as seedTasks, type CurrentUser, type Status, type Task } from "@/lib/data";
+import { createTodo, getMyTeamMembers } from "@/lib/api";
+import { tasks as seedTasks, memberFromUser, type CurrentUser, type Member, type Status, type Task } from "@/lib/data";
 
 interface AppContextValue {
   currentUser: CurrentUser;
+  // The signed-in user's team roster (GET /teams/members), including the user themselves.
+  members: Member[];
   tasks: Task[];
   toggleTask: (id: number) => void;
   addTask: (t: NewTaskInput) => Promise<void>;
@@ -34,6 +36,7 @@ export function useApp() {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
   const [theme, setTheme] = useState("light");
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
   const [modal, setModal] = useState(false);
@@ -52,6 +55,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setReady(true);
   }, []);
+
+  // Load the signed-in user's team roster for the sidebar (includes the user themselves).
+  useEffect(() => {
+    if (!user) {
+      setMembers([]);
+      return;
+    }
+    let alive = true;
+    getMyTeamMembers(Number(user.id))
+      .then((list) => {
+        if (!alive) return;
+        setMembers(list.map((u) => memberFromUser(u.id, u.name)));
+        // Backfill the team onto sessions restored before we persisted it (every roster
+        // row carries the same team), so the team weekly report has a team_id to use.
+        if (user.teamId == null && list.length > 0) {
+          const next: CurrentUser = { ...user, teamId: list[0].team_id, teamName: list[0].team_name };
+          localStorage.setItem(USER_KEY, JSON.stringify(next));
+          setUser(next);
+        }
+      })
+      .catch(() => {
+        if (alive) setMembers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user]);
 
   useEffect(() => {
     const saved = localStorage.getItem("cadence-theme");
@@ -117,6 +147,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             name: data.name,
             initials: data.name.slice(0, 2).toUpperCase(),
             color: "#6AA823",
+            teamId: data.team_id ?? undefined,
+            teamName: data.team_name ?? undefined,
           };
           localStorage.setItem(USER_KEY, JSON.stringify(next));
           setUser(next);
@@ -126,9 +158,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppContext.Provider value={{ currentUser: user, tasks, toggleTask, addTask }}>
+    <AppContext.Provider value={{ currentUser: user, members, tasks, toggleTask, addTask }}>
       <div className="app">
-        <Sidebar currentUser={user} />
+        <Sidebar currentUser={user} members={members} />
         <div className="main">
           <TopBar
             user={user}

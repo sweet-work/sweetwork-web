@@ -34,10 +34,68 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-/** Shape returned by POST /login and POST /signup. */
+/** Shape returned by POST /login and POST /signup. team_id/team_name come with both
+    (login's may be null when the user has no team yet). */
 export interface AuthResponse {
   id: number;
   name: string;
+  team_id?: number | null;
+  team_name?: string | null;
+}
+
+/** A team as returned by GET /teams and POST /teams. */
+export interface Team {
+  id: number;
+  name: string;
+}
+
+/** GET /teams — the teams shown in the sign-up team picker. */
+export async function getTeams(): Promise<Team[]> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/teams`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** POST /teams with { name } — creates a new team and returns it (id + name). */
+export async function createTeam(name: string): Promise<Team> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/teams`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** A teammate as returned by GET /teams/members. */
+export interface TeamMember {
+  id: number;
+  email: string;
+  name: string;
+  team_id: number;
+  team_name: string;
+}
+
+/** GET /teams/members?user_id= — the members sharing the given user's team. */
+export async function getMyTeamMembers(userId: number): Promise<TeamMember[]> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/teams/members?user_id=${userId}`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀원 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
 }
 
 /** POST /login with { email }. Returns null when the email is unknown (HTTP 401). */
@@ -57,14 +115,14 @@ export async function login(email: string): Promise<AuthResponse | null> {
   return res.json();
 }
 
-/** POST /signup with { email, name }. An optional team is sent along for the user's profile. */
-export async function signup(email: string, name: string, team?: string): Promise<AuthResponse> {
+/** POST /signup with { email, name, team_id } — registers the user under the chosen team. */
+export async function signup(email: string, name: string, teamId: number): Promise<AuthResponse> {
   let res: Response;
   try {
     res = await apiFetch(`${API_BASE}/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(team ? { email, name, team } : { email, name }),
+      body: JSON.stringify({ email, name, team_id: teamId }),
     });
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
@@ -126,12 +184,14 @@ export interface TodoBoardResponse {
   POSTPONED: TodoBoardItem[];
 }
 
-/** GET /todos — kanban board. Pass userId to scope to one user; omit for the whole team. */
-export async function getTodos(userId?: number): Promise<TodoBoardResponse> {
-  const qs = userId == null ? "" : `?user_id=${userId}`;
+/** GET /todos — kanban board for the logged-in user's team.
+    loginUserId(필수)로 같은 팀 일감만 조회하고, userId를 주면 그 팀원 일감만 좁혀서 조회. */
+export async function getTodos(loginUserId: number, userId?: number): Promise<TodoBoardResponse> {
+  const params = new URLSearchParams({ login_user_id: String(loginUserId) });
+  if (userId != null) params.set("user_id", String(userId));
   let res: Response;
   try {
-    res = await apiFetch(`${API_BASE}/todos${qs}`);
+    res = await apiFetch(`${API_BASE}/todos?${params.toString()}`);
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
   }
@@ -205,4 +265,200 @@ export async function deleteTodo(id: number): Promise<void> {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
   }
   if (!res.ok) throw new Error("일감 삭제에 실패했어요. 잠시 후 다시 시도해 주세요.");
+}
+
+/** Checklist status — INCOMPLETE: 미완료, COMPLETE: 완료. */
+export type ChecklistStatus = "INCOMPLETE" | "COMPLETE";
+
+/** One checklist item under a todo, as returned by the checklist endpoints. */
+export interface Checklist {
+  id: number;
+  todo_id: number;
+  content: string;
+  status: ChecklistStatus;
+  created_at: string;
+}
+
+/** GET /todos/{todoId}/checklists — the todo's checklist items. */
+export async function getChecklists(todoId: number): Promise<Checklist[]> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** POST /todos/{todoId}/checklists with { content } — adds an item (created as INCOMPLETE). */
+export async function createChecklist(todoId: number, content: string): Promise<Checklist> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트 추가에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** PATCH /todos/{todoId}/checklists/{checklistId}/status — toggles an item's status. */
+export async function updateChecklistStatus(
+  todoId: number,
+  checklistId: number,
+  status: ChecklistStatus,
+): Promise<Checklist> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists/${checklistId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트 상태 변경에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** DELETE /todos/{todoId}/checklists/{checklistId} — removes a checklist item. */
+export async function deleteChecklist(todoId: number, checklistId: number): Promise<void> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists/${checklistId}`, { method: "DELETE" });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트 삭제에 실패했어요. 잠시 후 다시 시도해 주세요.");
+}
+
+/** Shape returned by GET /reports/weekly — one user's this-week task counts.
+    week_start/end are Asia/Seoul Monday~Sunday. */
+export interface WeeklyStats {
+  user_id: number;
+  user_name: string;
+  week_start: string;
+  week_end: string;
+  completed_count: number;
+  in_progress_count: number;
+  planned_count: number;
+}
+
+/** GET /reports/weekly?user_id= — the user's completed/in-progress/planned counts this week. */
+export async function getWeeklyStats(userId: number): Promise<WeeklyStats> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/reports/weekly?user_id=${userId}`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("주간 현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** One task line inside an AI weekly-report section. display_date is pre-formatted (e.g. "06.02 (화)"). */
+export interface WeeklyReportSectionItem {
+  content: string;
+  memo?: string | null;
+  start_date: string;
+  end_date: string;
+  display_date: string;
+}
+
+/** A titled group of tasks within the AI weekly report. */
+export interface WeeklyReportSection {
+  title: string;
+  items: WeeklyReportSectionItem[];
+}
+
+/** One todo included in the AI weekly report (used for the count metrics). */
+export interface WeeklyReportTodo {
+  id: number;
+  content: string;
+  memo?: string | null;
+  status: string;
+  start_date: string;
+  end_date: string;
+}
+
+/** Shape returned by POST /reports/weekly — an AI-generated personal weekly report. */
+export interface WeeklyReportResponse {
+  user_id: number;
+  user_name: string;
+  week_start: string;
+  week_end: string;
+  summary: string;
+  insight: string;
+  completed_work: WeeklyReportSection;
+  next_week_plan: WeeklyReportSection;
+  todos: WeeklyReportTodo[];
+}
+
+/** POST /reports/weekly { user_id } — generates the user's AI weekly report (slow: an LLM call). */
+export async function createWeeklyReport(userId: number): Promise<WeeklyReportResponse> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/reports/weekly`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("주간 보고 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** Team report section item — like the personal one, plus the owning teammate. */
+export interface TeamWeeklyReportSectionItem extends WeeklyReportSectionItem {
+  user_id: number;
+  user_name: string;
+}
+
+/** A titled group of team tasks within the AI weekly report. */
+export interface TeamWeeklyReportSection {
+  title: string;
+  items: TeamWeeklyReportSectionItem[];
+}
+
+/** One team todo included in the report (count metrics + owner). */
+export interface TeamWeeklyReportTodo extends WeeklyReportTodo {
+  user_id: number;
+  user_name: string;
+}
+
+/** Shape returned by POST /reports/weekly/team — an AI-generated team weekly report. */
+export interface TeamWeeklyReportResponse {
+  team_id: number;
+  team_name: string;
+  week_start: string;
+  week_end: string;
+  summary: string;
+  insight: string;
+  completed_work: TeamWeeklyReportSection;
+  next_week_plan: TeamWeeklyReportSection;
+  todos: TeamWeeklyReportTodo[];
+}
+
+/** POST /reports/weekly/team { team_id } — generates the team's AI weekly report (slow: an LLM call). */
+export async function createTeamWeeklyReport(teamId: number): Promise<TeamWeeklyReportResponse> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/reports/weekly/team`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team_id: teamId }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀 주간 보고 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
 }

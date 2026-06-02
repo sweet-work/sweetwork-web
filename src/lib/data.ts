@@ -26,6 +26,9 @@ export interface CurrentUser {
   name: string;
   initials: string;
   color: string;
+  // The user's team, from login/signup — used for the team weekly report.
+  teamId?: number;
+  teamName?: string;
 }
 
 // "Today" — the real current date (normalized to local midnight so D-day math is clean).
@@ -66,6 +69,19 @@ export const STATUS: Record<Status, { label: string; color: string; soft: string
 };
 
 export const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+// Avatar palette — stable color picked per user id so a teammate keeps one color.
+export const AVATAR_COLORS = ["#6AA823", "#3F6FE5", "#4E9A6B", "#C2891C", "#8A8275", "#B0561F", "#7A5ACF"];
+
+/* Build a sidebar Member from a backend user (numeric id + name). */
+export function memberFromUser(id: number, name: string): Member {
+  return {
+    id: String(id),
+    name,
+    initials: name.slice(0, 2).toUpperCase(),
+    color: AVATAR_COLORS[id % AVATAR_COLORS.length],
+  };
+}
 
 export function memberById(id: string): Member | undefined {
   return members.find((m) => m.id === id);

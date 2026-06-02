@@ -1,23 +1,97 @@
 "use client";
-/* Cadence — per-member view: progress status on top, personal weekly report below. */
+/* Cadence — per-member view: progress status on top, personal weekly report below.
+   Real backend members (numeric ids) load their tasks from GET /todos?user_id=;
+   seed teammates fall back to the in-memory task list. */
+import { useEffect, useState } from "react";
 import { Avatar } from "./primitives";
 import { TaskRow } from "./Dashboard";
 import WeeklyReport from "./WeeklyReport";
-import { personById, type Task, type CurrentUser } from "@/lib/data";
+import { getTodos, getWeeklyStats, type WeeklyStats } from "@/lib/api";
+import { personById, type Task, type CurrentUser, type Member, type Status } from "@/lib/data";
+
+// Backend status enum → local Status (POSTPONED has no local equivalent → 예정).
+const STATUS_FROM_API: Record<string, Status> = {
+  TODO: "todo",
+  IN_PROGRESS: "progress",
+  DONE: "done",
+  POSTPONED: "todo",
+};
+
+// "2026-06-01" → "2026.06.01" for the week-range label.
+const ymd = (s: string) => s.replaceAll("-", ".");
 
 export default function MemberDetail({
   memberId,
   tasks,
+  members,
   currentUser,
   onToggle,
 }: {
   memberId: string;
   tasks: Task[];
+  members: Member[];
   currentUser: CurrentUser;
   onToggle: (id: number) => void;
 }) {
-  const person = personById(memberId, currentUser);
-  const mine = tasks.filter((t) => t.member === memberId);
+  // Real backend members have a numeric id; seed teammates ("mk" 등) keep the local path.
+  const userId = /^\d+$/.test(memberId) ? Number(memberId) : undefined;
+  // Resolve who we're viewing: the real team roster first, then seed team / self.
+  const person = members.find((m) => m.id === memberId) ?? personById(memberId, currentUser);
+
+  // A real member's tasks come from the API (null = not yet loaded); seed members use props.
+  const [realTasks, setRealTasks] = useState<Task[] | null>(null);
+  useEffect(() => {
+    if (userId == null) {
+      setRealTasks(null);
+      return;
+    }
+    let alive = true;
+    // login_user_id = the signed-in user (team scope); user_id = the teammate we're viewing.
+    getTodos(Number(currentUser.id), userId)
+      .then((board) => {
+        if (!alive) return;
+        const all = [...board.TODO, ...board.IN_PROGRESS, ...board.DONE, ...board.POSTPONED];
+        setRealTasks(
+          all.map((it) => ({
+            id: it.id,
+            title: it.content,
+            member: memberId,
+            date: it.start_date,
+            endDate: it.end_date > it.start_date ? it.end_date : undefined,
+            status: STATUS_FROM_API[it.status] ?? "todo",
+            pinned: false,
+          }))
+        );
+      })
+      .catch(() => {
+        if (alive) setRealTasks([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId, memberId, currentUser.id]);
+
+  // This-week task counts for a real member (GET /reports/weekly). null until loaded.
+  const [stats, setStats] = useState<WeeklyStats | null>(null);
+  useEffect(() => {
+    if (userId == null) {
+      setStats(null);
+      return;
+    }
+    let alive = true;
+    getWeeklyStats(userId)
+      .then((s) => {
+        if (alive) setStats(s);
+      })
+      .catch(() => {
+        if (alive) setStats(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+
+  const mine = userId != null ? realTasks ?? [] : tasks.filter((t) => t.member === memberId);
 
   if (!person) {
     return (
@@ -34,10 +108,25 @@ export default function MemberDetail({
   const todo = mine.filter((t) => t.status === "todo");
   const total = mine.length;
   const pct = total ? Math.round((done.length / total) * 100) : 0;
-  const w = (n: number) => (total ? (n / total) * 100 : 0) + "%";
+
+  // 이번 주 진행 상태 패널: 실 사용자는 주간 통계 API, 시드 팀원은 보유 일감에서 계산.
+  const cDone = stats ? stats.completed_count : done.length;
+  const cProg = stats ? stats.in_progress_count : prog.length;
+  const cTodo = stats ? stats.planned_count : todo.length;
+  const cTotal = cDone + cProg + cTodo;
+  const w = (n: number) => (cTotal ? (n / cTotal) * 100 : 0) + "%";
+
+  // 금주 담당 일감: 주간 통계의 주(월~일)와 겹치는 일감만. stats가 없으면(시드/로딩) 전체.
+  const weekTasks = stats
+    ? mine.filter((t) => {
+        const start = t.date;
+        const end = t.endDate ?? t.date;
+        return start <= stats.week_end && end >= stats.week_start;
+      })
+    : mine;
 
   // Show what's live first: not-done before done, earlier dates first.
-  const ordered = [...mine].sort(
+  const ordered = [...weekTasks].sort(
     (a, b) =>
       Number(a.status === "done") - Number(b.status === "done") || a.date.localeCompare(b.date)
   );
@@ -54,41 +143,44 @@ export default function MemberDetail({
         </div>
       </div>
 
-      {/* ── 진행 상태 ── */}
+      {/* ── 이번 주 진행 상태 (GET /reports/weekly) ── */}
       <div className="section-head">
-        <h2>진행 상태</h2>
-        <span className="count">{total}건</span>
+        <h2>이번 주 진행 상태</h2>
+        <span className="count">
+          {stats ? `${ymd(stats.week_start)} – ${ymd(stats.week_end)}` : `${cTotal}건`}
+        </span>
       </div>
       <div className="panel">
         <div className="report-metrics" style={{ margin: "2px 0 16px" }}>
           <div className="metric">
             <div className="v" style={{ color: "var(--status-done)" }}>
-              {done.length}
+              {cDone}
             </div>
             <div className="l">완료</div>
           </div>
           <div className="metric">
             <div className="v" style={{ color: "var(--status-progress)" }}>
-              {prog.length}
+              {cProg}
             </div>
             <div className="l">진행 중</div>
           </div>
           <div className="metric">
             <div className="v" style={{ color: "var(--status-todo)" }}>
-              {todo.length}
+              {cTodo}
             </div>
             <div className="l">예정</div>
           </div>
         </div>
         <span className="bar-track" style={{ height: 9 }}>
-          <i style={{ width: w(done.length), background: "var(--status-done)" }} />
-          <i style={{ width: w(prog.length), background: "var(--status-progress)" }} />
-          <i style={{ width: w(todo.length), background: "var(--status-todo)" }} />
+          <i style={{ width: w(cDone), background: "var(--status-done)" }} />
+          <i style={{ width: w(cProg), background: "var(--status-progress)" }} />
+          <i style={{ width: w(cTodo), background: "var(--status-todo)" }} />
         </span>
       </div>
 
       <div className="section-head" style={{ marginTop: 24 }}>
         <h2>금주 담당 일감</h2>
+        <span className="count">{ordered.length}건</span>
       </div>
       <div className="task-list">
         {ordered.length ? (
@@ -106,7 +198,7 @@ export default function MemberDetail({
       <div className="section-head" style={{ marginTop: 28 }}>
         <h2>개인 주간 보고 생성</h2>
       </div>
-      <WeeklyReport tasks={mine} currentUser={currentUser} person={{ name: person.name }} />
+      <WeeklyReport userId={userId} personName={person.name} tasks={mine} currentUser={currentUser} />
     </div>
   );
 }
