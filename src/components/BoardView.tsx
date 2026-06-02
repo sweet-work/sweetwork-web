@@ -7,18 +7,22 @@ import {
   updateTodoStatus,
   updateTodo,
   deleteTodo,
+  getChecklists,
+  createChecklist,
+  updateChecklistStatus,
+  deleteChecklist,
   type TodoBoardItem,
   type TodoStatus,
+  type Checklist,
+  type ChecklistStatus,
 } from "@/lib/api";
 import { dday, ddayColor, ddayLabel, fmtRange, STATUS } from "@/lib/data";
-import {
-  loadDetail,
-  saveDetail,
-  clearDetail,
-  checklistProgress,
-  newItemId,
-  type TaskDetail,
-} from "@/lib/taskDetail";
+import { loadDetail, saveDetail, clearDetail, type TaskDetail } from "@/lib/taskDetail";
+
+// Done/total for a checklist (card badge + modal progress bar).
+function progressOf(list: Checklist[]): { done: number; total: number } {
+  return { done: list.filter((c) => c.status === "COMPLETE").length, total: list.length };
+}
 
 type Person = { id: string; name: string; initials: string; color: string };
 
@@ -88,7 +92,8 @@ function toBoardTask(it: TodoBoardItem): BoardTask {
 
 function BoardCard({
   task,
-  detail,
+  checklist,
+  hasMemo,
   dragging,
   menuOpen,
   onOpen,
@@ -99,7 +104,8 @@ function BoardCard({
   onDelete,
 }: {
   task: BoardTask;
-  detail?: TaskDetail;
+  checklist: Checklist[];
+  hasMemo: boolean;
   dragging: boolean;
   menuOpen: boolean;
   onOpen: (task: BoardTask) => void;
@@ -111,9 +117,8 @@ function BoardCard({
 }) {
   const diff = dday(task.endDate ?? task.date);
   const showD = task.status !== "done" && diff <= 7;
-  // Card-level signals from the (locally stored) detail: checklist progress + a memo dot.
-  const prog = detail ? checklistProgress(detail) : { done: 0, total: 0 };
-  const hasMemo = !!detail?.memo;
+  // Card-level signals: checklist progress (from the API) + a memo dot (localStorage).
+  const prog = progressOf(checklist);
   return (
     <div
       className={"t-card" + (dragging ? " dragging" : "")}
@@ -203,6 +208,7 @@ function BoardCard({
 function BoardColumn({
   status,
   tasks,
+  checklists,
   details,
   draggingId,
   menuFor,
@@ -219,6 +225,7 @@ function BoardColumn({
 }: {
   status: BoardCol;
   tasks: BoardTask[];
+  checklists: Record<number, Checklist[]>;
   details: Record<number, TaskDetail>;
   draggingId: number | null;
   menuFor: number | null;
@@ -259,7 +266,8 @@ function BoardColumn({
           <BoardCard
             key={t.id}
             task={t}
-            detail={details[t.id]}
+            checklist={checklists[t.id] ?? []}
+            hasMemo={!!details[t.id]?.memo}
             dragging={draggingId === t.id}
             menuOpen={menuFor === t.id}
             onOpen={onOpen}
@@ -430,45 +438,70 @@ function DeleteConfirm({
 }
 
 // Detail modal — opens on a card click. Title/dates are edited via the ✎ (reuses
-// EditTaskModal); the memo + checklist live here and persist to localStorage.
+// EditTaskModal); the memo persists to localStorage and the checklist is backed by the API.
 function TaskDetailModal({
   task,
-  detail,
+  checklist,
+  memo,
+  loading,
   onClose,
-  onChange,
+  onMemoChange,
+  onAddItem,
+  onToggleItem,
+  onRemoveItem,
   onEdit,
   onDelete,
 }: {
   task: BoardTask;
-  detail: TaskDetail;
+  checklist: Checklist[];
+  memo: string;
+  loading: boolean;
   onClose: () => void;
-  onChange: (next: TaskDetail) => void;
+  onMemoChange: (memo: string) => void;
+  onAddItem: (content: string) => Promise<void>;
+  onToggleItem: (item: Checklist) => Promise<void>;
+  onRemoveItem: (item: Checklist) => Promise<void>;
   onEdit: (task: BoardTask) => void;
   onDelete: (task: BoardTask) => void;
 }) {
   const [draft, setDraft] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [clErr, setClErr] = useState("");
   const meta = COL_META[task.status];
   const diff = dday(task.endDate ?? task.date);
-  const prog = checklistProgress(detail);
+  // Stable order so optimistic toggles/adds don't reshuffle the list.
+  const items = [...checklist].sort((a, b) => a.id - b.id);
+  const prog = progressOf(checklist);
 
-  // Every mutation goes through here so the parent map + localStorage stay in sync.
-  function setMemo(memo: string) {
-    onChange({ ...detail, memo });
-  }
-  function addItem() {
+  async function addItem() {
     const text = draft.trim();
-    if (!text) return;
-    onChange({ ...detail, checklist: [...detail.checklist, { id: newItemId(), text, done: false }] });
-    setDraft("");
+    if (!text || adding) return;
+    setAdding(true);
+    setClErr("");
+    try {
+      await onAddItem(text);
+      setDraft("");
+    } catch (e) {
+      setClErr(e instanceof Error ? e.message : "체크리스트 추가에 실패했어요.");
+    } finally {
+      setAdding(false);
+    }
   }
-  function toggleItem(id: string) {
-    onChange({
-      ...detail,
-      checklist: detail.checklist.map((c) => (c.id === id ? { ...c, done: !c.done } : c)),
-    });
+  async function toggleItem(item: Checklist) {
+    setClErr("");
+    try {
+      await onToggleItem(item);
+    } catch (e) {
+      setClErr(e instanceof Error ? e.message : "체크리스트 상태 변경에 실패했어요.");
+    }
   }
-  function removeItem(id: string) {
-    onChange({ ...detail, checklist: detail.checklist.filter((c) => c.id !== id) });
+  async function removeItem(item: Checklist) {
+    setClErr("");
+    try {
+      await onRemoveItem(item);
+    } catch (e) {
+      setClErr(e instanceof Error ? e.message : "체크리스트 삭제에 실패했어요.");
+    }
   }
 
   return (
@@ -518,12 +551,12 @@ function TaskDetailModal({
             <textarea
               className="dt-memo"
               placeholder="진행 상황이나 참고할 내용을 자유롭게 적어요…"
-              value={detail.memo}
-              onChange={(e) => setMemo(e.target.value)}
+              value={memo}
+              onChange={(e) => onMemoChange(e.target.value)}
             />
           </div>
 
-          {/* Checklist of sub-tasks */}
+          {/* Checklist of sub-tasks — backed by the todo's checklist endpoints */}
           <div className="dt-section">
             <div className="dt-section-head">
               <Icon name="check-square" size={15} /> 체크리스트
@@ -534,24 +567,32 @@ function TaskDetailModal({
                 <span style={{ width: `${(prog.done / prog.total) * 100}%` }} />
               </div>
             )}
-            <ul className="dt-checklist">
-              {detail.checklist.map((c) => (
-                <li key={c.id} className={c.done ? "done" : ""}>
-                  <button className="dt-check" onClick={() => toggleItem(c.id)}>
-                    <Icon name={c.done ? "check-square" : "square"} size={17} />
-                  </button>
-                  <span className="dt-item-text">{c.text}</span>
-                  <button className="dt-remove" title="항목 삭제" onClick={() => removeItem(c.id)}>
-                    <Icon name="x" size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {loading ? (
+              <div style={{ fontSize: 13, color: "var(--fg-3)", padding: "8px 4px" }}>불러오는 중…</div>
+            ) : (
+              <ul className="dt-checklist">
+                {items.map((c) => {
+                  const done = c.status === "COMPLETE";
+                  return (
+                    <li key={c.id} className={done ? "done" : ""}>
+                      <button className="dt-check" onClick={() => toggleItem(c)}>
+                        <Icon name={done ? "check-square" : "square"} size={17} />
+                      </button>
+                      <span className="dt-item-text">{c.content}</span>
+                      <button className="dt-remove" title="항목 삭제" onClick={() => removeItem(c)}>
+                        <Icon name="x" size={14} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <div className="dt-add">
               <Icon name="plus" size={15} />
               <input
                 placeholder="여기에 추가 항목을 입력해주세요"
                 value={draft}
+                disabled={adding}
                 onChange={(e) => setDraft(e.target.value)}
                 // Ignore the Enter that commits a Korean IME composition, else the just-
                 // committed last char leaks into the next item.
@@ -561,6 +602,7 @@ function TaskDetailModal({
                 }}
               />
             </div>
+            {clErr && <div className="err" style={{ marginTop: 8 }}>{clErr}</div>}
           </div>
         </div>
         <div className="mfoot" style={{ justifyContent: "space-between" }}>
@@ -590,9 +632,11 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [editTask, setEditTask] = useState<BoardTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<BoardTask | null>(null);
-  // Locally-stored memo + checklist per task id, and the task whose detail is open.
+  // Locally-stored memo per task id, API-backed checklists per task id, and the open detail.
   const [details, setDetails] = useState<Record<number, TaskDetail>>({});
+  const [checklists, setChecklists] = useState<Record<number, Checklist[]>>({});
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Close an open card menu when clicking anywhere outside it.
@@ -613,12 +657,22 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
         if (!alive) return;
         const all = [...res.TODO, ...res.IN_PROGRESS, ...res.DONE, ...res.POSTPONED];
         setTasks(all.map(toBoardTask));
-        // Hydrate each task's locally-stored memo + checklist for the card badges.
+        // Hydrate each task's locally-stored memo for the card's memo dot.
         const map: Record<number, TaskDetail> = {};
         all.forEach((it) => {
           map[it.id] = loadDetail(it.id);
         });
         setDetails(map);
+        // Pull each task's checklist for the card progress badges (best-effort per task).
+        Promise.all(
+          all.map((it) =>
+            getChecklists(it.id)
+              .then((cl) => [it.id, cl] as const)
+              .catch(() => [it.id, [] as Checklist[]] as const)
+          )
+        ).then((entries) => {
+          if (alive) setChecklists(Object.fromEntries(entries));
+        });
       })
       .catch((e) => {
         if (alive) setErr(e instanceof Error ? e.message : "일감을 불러오지 못했어요.");
@@ -673,12 +727,67 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
       delete next[id];
       return next;
     });
+    setChecklists((cur) => {
+      const next = { ...cur };
+      delete next[id];
+      return next;
+    });
   }
 
-  // Persist a task's detail (memo/checklist) to localStorage and the in-memory map.
-  function handleDetailChange(id: number, next: TaskDetail) {
-    saveDetail(id, next);
-    setDetails((cur) => ({ ...cur, [id]: next }));
+  // Persist a task's memo to localStorage and the in-memory map.
+  function handleMemoChange(id: number, memo: string) {
+    saveDetail(id, { memo });
+    setDetails((cur) => ({ ...cur, [id]: { memo } }));
+  }
+
+  // Open the detail modal and refresh that task's checklist from the API.
+  function openDetail(id: number) {
+    setDetailId(id);
+    setDetailLoading(true);
+    getChecklists(id)
+      .then((cl) => setChecklists((cur) => ({ ...cur, [id]: cl })))
+      .catch(() => {
+        /* keep whatever the board-load fetch already gave us */
+      })
+      .finally(() => setDetailLoading(false));
+  }
+
+  // Add a checklist item, then append the server-created item to the map.
+  async function addChecklist(todoId: number, content: string) {
+    const created = await createChecklist(todoId, content);
+    setChecklists((cur) => ({ ...cur, [todoId]: [...(cur[todoId] ?? []), created] }));
+  }
+
+  // Toggle an item's status optimistically; roll back if the PATCH fails.
+  async function toggleChecklist(todoId: number, item: Checklist) {
+    const next: ChecklistStatus = item.status === "COMPLETE" ? "INCOMPLETE" : "COMPLETE";
+    setChecklists((cur) => ({
+      ...cur,
+      [todoId]: (cur[todoId] ?? []).map((c) => (c.id === item.id ? { ...c, status: next } : c)),
+    }));
+    try {
+      await updateChecklistStatus(todoId, item.id, next);
+    } catch (e) {
+      setChecklists((cur) => ({
+        ...cur,
+        [todoId]: (cur[todoId] ?? []).map((c) => (c.id === item.id ? { ...c, status: item.status } : c)),
+      }));
+      throw e;
+    }
+  }
+
+  // Remove an item optimistically; re-add it (display re-sorts by id) if the DELETE fails.
+  async function removeChecklist(todoId: number, item: Checklist) {
+    setChecklists((cur) => ({
+      ...cur,
+      [todoId]: (cur[todoId] ?? []).filter((c) => c.id !== item.id),
+    }));
+    try {
+      await deleteChecklist(todoId, item.id);
+    } catch (e) {
+      setChecklists((cur) => ({ ...cur, [todoId]: [...(cur[todoId] ?? []), item] }));
+      throw e;
+    }
   }
 
   // Distinct people present on the board, for the filter chips.
@@ -720,11 +829,12 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
             key={c}
             status={c}
             tasks={shown.filter((t) => t.status === c)}
+            checklists={checklists}
             details={details}
             draggingId={draggingId}
             menuFor={menuFor}
             isOver={overCol === c && draggingId != null}
-            onOpen={(t) => setDetailId(t.id)}
+            onOpen={(t) => openDetail(t.id)}
             onDragStartCard={setDraggingId}
             onDragEndCard={() => {
               setDraggingId(null);
@@ -749,9 +859,14 @@ export default function BoardView({ refreshKey = 0 }: { refreshKey?: number }) {
       {detailId != null && tasks.find((t) => t.id === detailId) && (
         <TaskDetailModal
           task={tasks.find((t) => t.id === detailId)!}
-          detail={details[detailId] ?? { memo: "", checklist: [] }}
+          checklist={checklists[detailId] ?? []}
+          memo={details[detailId]?.memo ?? ""}
+          loading={detailLoading && checklists[detailId] === undefined}
           onClose={() => setDetailId(null)}
-          onChange={(next) => handleDetailChange(detailId, next)}
+          onMemoChange={(memo) => handleMemoChange(detailId, memo)}
+          onAddItem={(content) => addChecklist(detailId, content)}
+          onToggleItem={(item) => toggleChecklist(detailId, item)}
+          onRemoveItem={(item) => removeChecklist(detailId, item)}
           onEdit={(t) => setEditTask(t)}
           onDelete={(t) => {
             setDetailId(null);

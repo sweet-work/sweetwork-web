@@ -243,3 +243,74 @@ export async function deleteTodo(id: number): Promise<void> {
   }
   if (!res.ok) throw new Error("일감 삭제에 실패했어요. 잠시 후 다시 시도해 주세요.");
 }
+
+/** Checklist status — INCOMPLETE: 미완료, COMPLETE: 완료. */
+export type ChecklistStatus = "INCOMPLETE" | "COMPLETE";
+
+/** One checklist item under a todo, as returned by the checklist endpoints. */
+export interface Checklist {
+  id: number;
+  todo_id: number;
+  content: string;
+  status: ChecklistStatus;
+  created_at: string;
+}
+
+/** GET /todos/{todoId}/checklists — the todo's checklist items. */
+export async function getChecklists(todoId: number): Promise<Checklist[]> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** POST /todos/{todoId}/checklists with { content } — adds an item (created as INCOMPLETE). */
+export async function createChecklist(todoId: number, content: string): Promise<Checklist> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트 추가에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** PATCH /todos/{todoId}/checklists/{checklistId}/status — toggles an item's status. */
+export async function updateChecklistStatus(
+  todoId: number,
+  checklistId: number,
+  status: ChecklistStatus,
+): Promise<Checklist> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists/${checklistId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트 상태 변경에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** DELETE /todos/{todoId}/checklists/{checklistId} — removes a checklist item. */
+export async function deleteChecklist(todoId: number, checklistId: number): Promise<void> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/todos/${todoId}/checklists/${checklistId}`, { method: "DELETE" });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("체크리스트 삭제에 실패했어요. 잠시 후 다시 시도해 주세요.");
+}
