@@ -202,11 +202,17 @@ export async function getTodos(loginUserId: number, userId?: number): Promise<To
 /** One task as returned by GET /todos/calendar. Same shape as the board item. */
 export type TodoCalendarItem = TodoBoardItem;
 
-/** GET /todos/calendar?year=&month= — tasks overlapping the given month. */
-export async function getCalendarTodos(year: number, month: number): Promise<TodoCalendarItem[]> {
+/** GET /todos/calendar — tasks overlapping the given month, scoped to the login user's team. */
+export async function getCalendarTodos(
+  loginUserId: number,
+  year: number,
+  month: number,
+): Promise<TodoCalendarItem[]> {
   let res: Response;
   try {
-    res = await apiFetch(`${API_BASE}/todos/calendar?year=${year}&month=${month}`);
+    res = await apiFetch(
+      `${API_BASE}/todos/calendar?login_user_id=${loginUserId}&year=${year}&month=${month}`,
+    );
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
   }

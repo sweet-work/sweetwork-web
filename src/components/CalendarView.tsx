@@ -108,7 +108,7 @@ export default function CalendarView({
     let alive = true;
     setCalErr("");
     // API months are 1-based; `month` is 0-based here.
-    getCalendarTodos(year, month + 1)
+    getCalendarTodos(Number(loginUserId), year, month + 1)
       .then((res) => {
         if (alive) setItems(res);
       })
@@ -118,7 +118,7 @@ export default function CalendarView({
     return () => {
       alive = false;
     };
-  }, [year, month, refreshKey]);
+  }, [year, month, refreshKey, loginUserId]);
 
   function shiftMonth(delta: number) {
     setCursor((c) => {
