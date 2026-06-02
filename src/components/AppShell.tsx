@@ -185,7 +185,11 @@ export function NewTaskModal({
                 placeholder="무엇을 진행하나요?"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && save()}
+                // Skip the Enter that commits an in-progress Korean IME composition.
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === "Enter") save();
+                }}
               />
             </div>
           </div>
