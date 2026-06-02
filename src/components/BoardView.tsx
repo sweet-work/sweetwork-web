@@ -122,6 +122,10 @@ function BoardCard({
   return (
     <div
       className={"t-card" + (dragging ? " dragging" : "")}
+      // Card id for the touch drag controller (it reads this on touchstart). The
+      // controller lives at the board level so the same node keeps receiving the
+      // gesture even as the finger moves over other columns.
+      data-id={task.id}
       draggable
       // A real drag suppresses the click, so a plain click opens the detail.
       onClick={() => onOpen(task)}
@@ -244,6 +248,8 @@ function BoardColumn({
   return (
     <div
       className={"board-col" + (isOver ? " drop-over" : "")}
+      // Drop-target id for the touch drag's elementFromPoint lookup (mobile).
+      data-col={status}
       onDragOver={(e) => {
         // preventDefault is required for the column to count as a valid drop target.
         e.preventDefault();
@@ -645,6 +651,11 @@ export default function BoardView({
   const [detailId, setDetailId] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Live mirrors for the touch-drag controller (set up once with native listeners,
+  // so it can't close over fresh `tasks`/`moveTask` — it reads them through refs).
+  const tasksRef = useRef<BoardTask[] | null>(tasks);
+  tasksRef.current = tasks;
+  const moveTaskRef = useRef<(id: number, toCol: BoardCol) => void>(() => {});
 
   // Close an open card menu when clicking anywhere outside it.
   useEffect(() => {
@@ -655,6 +666,130 @@ export default function BoardView({
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
   }, [menuFor]);
+
+  // Touch drag-and-drop (mobile). HTML5 drag events don't fire from touch, so we run
+  // a long-press → drag → drop gesture by hand: hold a card briefly (so a normal
+  // swipe still scrolls the page), then a floating clone follows the finger and the
+  // column under it becomes the drop target. Native listeners (passive:false) let us
+  // hold the page still mid-drag; everything mutable is read through refs.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const LONG_PRESS = 180; // ms to hold before a drag starts
+    const MOVE_SLOP = 9; // px of pre-drag movement that means "scrolling, not dragging"
+    const EDGE = 72; // auto-scroll band at the top/bottom of the viewport
+
+    type Drag = {
+      id: number;
+      startX: number;
+      startY: number;
+      offX: number; // finger offset within the card, so the ghost doesn't jump
+      offY: number;
+      dragging: boolean;
+      timer: number;
+      ghost: HTMLElement | null;
+      card: HTMLElement;
+    };
+    let st: Drag | null = null;
+
+    function columnAt(x: number, y: number): BoardCol | null {
+      const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(".board-col");
+      return (el?.dataset.col as BoardCol | undefined) ?? null;
+    }
+
+    function placeGhost(x: number, y: number) {
+      if (!st?.ghost) return;
+      st.ghost.style.left = `${x - st.offX}px`;
+      st.ghost.style.top = `${y - st.offY}px`;
+    }
+
+    // Long-press fired: lift the card into a floating clone that tracks the finger.
+    function beginDrag() {
+      if (!st) return;
+      st.dragging = true;
+      const rect = st.card.getBoundingClientRect();
+      const ghost = st.card.cloneNode(true) as HTMLElement;
+      ghost.classList.add("drag-ghost");
+      ghost.style.width = `${rect.width}px`;
+      st.ghost = ghost;
+      document.body.appendChild(ghost);
+      placeGhost(st.startX, st.startY);
+      setDraggingId(st.id); // dims the original card (.dragging)
+      navigator.vibrate?.(12);
+    }
+
+    function cleanup() {
+      if (st?.timer) clearTimeout(st.timer);
+      st?.ghost?.remove();
+      st = null;
+      setDraggingId(null);
+      setOverCol(null);
+    }
+
+    function onStart(e: TouchEvent) {
+      if (e.touches.length !== 1) return;
+      const target = e.target as HTMLElement;
+      // Let taps on the "..." menu / its buttons through untouched.
+      if (target.closest("button")) return;
+      const card = target.closest<HTMLElement>(".t-card");
+      if (!card?.dataset.id) return;
+      const t = e.touches[0];
+      const rect = card.getBoundingClientRect();
+      st = {
+        id: Number(card.dataset.id),
+        startX: t.clientX,
+        startY: t.clientY,
+        offX: t.clientX - rect.left,
+        offY: t.clientY - rect.top,
+        dragging: false,
+        ghost: null,
+        card,
+        timer: window.setTimeout(beginDrag, LONG_PRESS),
+      };
+    }
+
+    function onMove(e: TouchEvent) {
+      if (!st) return;
+      const t = e.touches[0];
+      if (!st.dragging) {
+        // Moved before the long-press fired ⇒ a scroll, not a drag: bail and let it scroll.
+        if (Math.abs(t.clientX - st.startX) > MOVE_SLOP || Math.abs(t.clientY - st.startY) > MOVE_SLOP) {
+          cleanup();
+        }
+        return;
+      }
+      e.preventDefault(); // hold the page still while a card is in hand
+      placeGhost(t.clientX, t.clientY);
+      setOverCol(columnAt(t.clientX, t.clientY)); // bails out internally when unchanged
+      // Auto-scroll near the edges so tall / stacked columns stay reachable.
+      if (t.clientY < EDGE) window.scrollBy(0, -10);
+      else if (t.clientY > window.innerHeight - EDGE) window.scrollBy(0, 10);
+    }
+
+    function onEnd(e: TouchEvent) {
+      if (!st) return;
+      if (st.dragging) {
+        e.preventDefault(); // cancel the click that would otherwise open the detail
+        const t = e.changedTouches[0];
+        const col = columnAt(t.clientX, t.clientY);
+        if (col) moveTaskRef.current(st.id, col);
+      }
+      cleanup();
+    }
+
+    root.addEventListener("touchstart", onStart, { passive: false });
+    root.addEventListener("touchmove", onMove, { passive: false });
+    root.addEventListener("touchend", onEnd, { passive: false });
+    root.addEventListener("touchcancel", cleanup);
+    return () => {
+      root.removeEventListener("touchstart", onStart);
+      root.removeEventListener("touchmove", onMove);
+      root.removeEventListener("touchend", onEnd);
+      root.removeEventListener("touchcancel", cleanup);
+      st?.ghost?.remove();
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -689,14 +824,11 @@ export default function BoardView({
     };
   }, [refreshKey, loginUserId]);
 
-  // Drop a card onto a column: optimistically move it, then PATCH the backend.
-  function handleDrop(toCol: BoardCol) {
-    const id = draggingId;
-    setDraggingId(null);
-    setOverCol(null);
-    if (id == null) return;
-
-    const task = tasks?.find((t) => t.id === id);
+  // Move a card to a column: optimistic update + PATCH, with rollback on failure.
+  // Shared by HTML5 drag-drop (desktop) and the touch drag (mobile) so both paths
+  // hit the backend identically.
+  function moveTask(id: number, toCol: BoardCol) {
+    const task = tasksRef.current?.find((t) => t.id === id);
     if (!task || task.status === toCol) return; // no-op when dropped on its own column
 
     const prev = task.status;
@@ -709,6 +841,18 @@ export default function BoardView({
       setTasks((cur) => cur && cur.map((t) => (t.id === id ? { ...t, status: prev } : t)));
       setMoveErr(e instanceof Error ? e.message : "일감 상태 변경에 실패했어요.");
     });
+  }
+  // Keep the touch controller's reference to moveTask current across renders.
+  useEffect(() => {
+    moveTaskRef.current = moveTask;
+  });
+
+  // Drop a card onto a column (HTML5 drag): move it, then PATCH the backend.
+  function handleDrop(toCol: BoardCol) {
+    const id = draggingId;
+    setDraggingId(null);
+    setOverCol(null);
+    if (id != null) moveTask(id, toCol);
   }
 
   // Save an edit: PUT the new content/dates, then update the card in place.
