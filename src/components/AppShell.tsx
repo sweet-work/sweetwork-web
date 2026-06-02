@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, Avatar, Mark } from "./primitives";
 import TopProgressBar from "./TopProgressBar";
-import { members, TODAY_STR, type CurrentUser } from "@/lib/data";
+import { members, personById, TODAY_STR, type CurrentUser } from "@/lib/data";
 
 export type View = "dashboard" | "board" | "calendar" | "report";
 
@@ -23,7 +23,9 @@ export function viewFromPath(pathname: string): View {
 }
 
 export function Sidebar({ currentUser }: { currentUser: CurrentUser }) {
-  const active = viewFromPath(usePathname());
+  const pathname = usePathname();
+  const active = viewFromPath(pathname);
+  const activeMember = pathname.startsWith("/member/") ? pathname.split("/")[2] : null;
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -45,10 +47,14 @@ export function Sidebar({ currentUser }: { currentUser: CurrentUser }) {
       <div className="nav-label">우리 팀</div>
       <div className="member-list">
         {members.map((m) => (
-          <div key={m.id} className="member-row">
+          <Link
+            key={m.id}
+            href={`/member/${m.id}`}
+            className={"member-row" + (activeMember === m.id ? " active" : "")}
+          >
             <Avatar member={m} size={22} />
             {m.name}
-          </div>
+          </Link>
         ))}
       </div>
 
@@ -91,7 +97,12 @@ export function TopBar({
   onNewTask: () => void;
   onLogout: () => void;
 }) {
-  const meta = TITLES[viewFromPath(usePathname())];
+  const pathname = usePathname();
+  let meta = TITLES[viewFromPath(pathname)];
+  if (pathname.startsWith("/member/")) {
+    const p = personById(pathname.split("/")[2], user);
+    meta = { t: p ? `${p.name}님의 현황` : "팀원 현황", s: "진행 상태와 개인 주간 보고" };
+  }
   return (
     <header className="topbar">
       <div>

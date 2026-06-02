@@ -91,8 +91,8 @@ button { font-family: inherit; }
 /* ---------------- D-day chip ---------------- */
 .dday-chip {
   font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-  font-weight: 600; font-size: 12px; letter-spacing: .03em;
-  padding: 3px 8px; border-radius: var(--radius-sm); color: #fff;
+  font-weight: 600; font-size: 10.5px; letter-spacing: .03em;
+  padding: 2px 7px; border-radius: var(--radius-sm); color: #fff;
 }
 
 /* ---------------- App shell ---------------- */
@@ -125,8 +125,10 @@ button { font-family: inherit; }
 .member-row {
   display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: var(--radius-sm);
   font-size: 13px; color: var(--fg-2); cursor: pointer; border: 0; background: transparent; width: 100%; text-align: left;
+  text-decoration: none;
 }
 .member-row:hover { background: var(--surface-2); }
+.member-row.active { background: var(--surface-2); color: var(--fg-1); font-weight: 600; }
 
 /* ---------------- Top bar ---------------- */
 .main { display: flex; flex-direction: column; min-width: 0; }
@@ -180,9 +182,9 @@ button { font-family: inherit; }
   border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 14px 16px; overflow: hidden;
 }
 .dday-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--bar, var(--dday-far)); }
-.dday-card .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 30px; line-height: 1; letter-spacing: .02em; }
-.dday-card .lab { font-size: 14px; font-weight: 600; margin-top: 10px; }
-.dday-card .date { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-3); margin-top: 4px; }
+.dday-card .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 22px; line-height: 1; letter-spacing: .02em; }
+.dday-card .lab { font-size: 13px; font-weight: 600; margin-top: 8px; }
+.dday-card .date { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); margin-top: 4px; }
 
 .dash-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px; align-items: start; }
 @media (max-width: 920px) { .dash-grid { grid-template-columns: 1fr; } }
@@ -348,6 +350,13 @@ button { font-family: inherit; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ---------------- Member detail ---------------- */
+.member-detail { max-width: 760px; }
+.member-detail > .report-wrap { margin-top: 0; }
+.member-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+.member-hero .who h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; margin: 0; }
+.member-hero .who p { font-size: 13px; color: var(--fg-2); margin: 3px 0 0; }
+
 /* ---------------- Login ---------------- */
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg-base); }
 .login-card { width: 100%; max-width: 372px; background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); padding: 34px 32px; }
@@ -361,6 +370,49 @@ button { font-family: inherit; }
 .login-card .btn { width: 100%; padding: 11px; }
 .login-card .hint { font-size: 12px; color: var(--fg-3); margin-top: 16px; text-align: center; line-height: 1.5; }
 .login-card .err { font-size: 12.5px; color: var(--danger); margin-top: -8px; margin-bottom: 14px; }
+
+/* ---------------- Team select ---------------- */
+.team-select { position: relative; }
+.team-trigger { width: 100%; cursor: pointer; text-align: left; }
+.team-trigger:disabled { opacity: .6; cursor: not-allowed; }
+.team-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.team-trigger.open .ic { color: var(--accent); }
+.team-value { flex: 1; font-size: 14px; color: var(--fg-1); }
+.team-value.placeholder { color: var(--fg-3); }
+.team-caret { transition: transform var(--dur-fast); }
+.team-trigger.open .team-caret { transform: rotate(180deg); }
+.team-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 20;
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 5px;
+  animation: fade var(--dur-fast) var(--ease-out);
+}
+.team-add {
+  display: flex; align-items: center; gap: 7px; width: 100%; padding: 9px 10px;
+  border: 0; background: transparent; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 13.5px; font-weight: 600; color: var(--accent); text-align: left;
+}
+.team-add:hover { background: var(--accent-soft); }
+.team-create { display: flex; flex-direction: column; gap: 8px; padding: 5px; }
+.team-create input {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 9px 11px; font-family: var(--font-sans); font-size: 13.5px; color: var(--fg-1);
+  background: var(--surface-1); outline: 0;
+}
+.team-create input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.team-create-actions { display: flex; justify-content: flex-end; gap: 7px; }
+/* Give the ghost "취소" button a faint surface + border so it reads as a button, not just text. */
+.team-create-actions .btn-ghost { background: var(--surface-2); border-color: var(--border-subtle); color: var(--fg-1); }
+.team-create-actions .btn-ghost:hover { background: var(--surface-sunken); border-color: var(--border-strong); }
+.team-options { margin-top: 4px; border-top: 1px solid var(--border-subtle); padding-top: 4px; max-height: 196px; overflow-y: auto; }
+.team-option {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  padding: 9px 10px; border: 0; background: transparent; border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 13.5px; color: var(--fg-1); text-align: left;
+}
+.team-option:hover { background: var(--surface-2); }
+.team-option.selected { color: var(--accent); font-weight: 600; }
+.team-option .ic { color: var(--accent); }
 
 /* ---------------- New task modal ---------------- */
 .overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 50; animation: fade var(--dur-base) var(--ease-out); }
