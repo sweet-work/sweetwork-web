@@ -1,12 +1,20 @@
 "use client";
 /* Cadence — per-member view: progress status on top, personal weekly report below.
-   Real backend members (numeric ids) load their tasks from GET /todos?user_id=;
+   Real backend members (numeric ids) load all tasks from GET /todos?user_id= and
+   this week's 금주 담당 일감 from GET /reports/weekly/todos?user_id=;
    seed teammates fall back to the in-memory task list. */
 import { useEffect, useState } from "react";
 import { Avatar } from "./primitives";
 import { TaskRow } from "./Dashboard";
 import WeeklyReport from "./WeeklyReport";
-import { getTodos, getWeeklyStats, type WeeklyStats } from "@/lib/api";
+import {
+  getTodos,
+  getWeeklyStats,
+  getWeeklyReportTodos,
+  updateTodoStatus,
+  type WeeklyStats,
+  type TodoStatus,
+} from "@/lib/api";
 import { personById, type Task, type CurrentUser, type Member, type Status } from "@/lib/data";
 
 // Backend status enum → local Status (POSTPONED has no local equivalent → 예정).
@@ -15,6 +23,13 @@ const STATUS_FROM_API: Record<string, Status> = {
   IN_PROGRESS: "progress",
   DONE: "done",
   POSTPONED: "todo",
+};
+
+// Local Status → backend status enum (for PATCH /todos/{id}/status).
+const STATUS_TO_API: Record<Status, TodoStatus> = {
+  todo: "TODO",
+  progress: "IN_PROGRESS",
+  done: "DONE",
 };
 
 // "2026-06-01" → "2026.06.01" for the week-range label.
@@ -91,6 +106,55 @@ export default function MemberDetail({
     };
   }, [userId]);
 
+  // 금주 담당 일감(GET /reports/weekly/todos): 이번 주와 겹치는 모든 상태의 일감. null = 로딩 전.
+  const [weekTodos, setWeekTodos] = useState<Task[] | null>(null);
+  useEffect(() => {
+    if (userId == null) {
+      setWeekTodos(null);
+      return;
+    }
+    let alive = true;
+    getWeeklyReportTodos(userId)
+      .then((res) => {
+        if (!alive) return;
+        setWeekTodos(
+          res.todos.map((it) => ({
+            id: it.id,
+            title: it.content,
+            member: memberId,
+            date: it.start_date,
+            endDate: it.end_date > it.start_date ? it.end_date : undefined,
+            status: STATUS_FROM_API[it.status] ?? "todo",
+            pinned: false,
+          }))
+        );
+      })
+      .catch(() => {
+        if (alive) setWeekTodos([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId, memberId]);
+
+  // 실 팀원: 체크 시 상태를 토글하고(완료 ↔ 진행 중) API로 저장, 로컬 목록도 즉시 반영.
+  // 금주 일감 목록(weekTodos)과 전체 목록(realTasks)을 함께 갱신해 화면을 일관되게 유지한다.
+  // 시드 팀원: 기존 전역 토글(onToggle)을 그대로 사용.
+  function toggleReal(id: number) {
+    const current = (weekTodos ?? []).find((t) => t.id === id) ?? (realTasks ?? []).find((t) => t.id === id);
+    if (!current) return;
+    const next: Status = current.status === "done" ? "progress" : "done";
+    const apply = (s: Status) => {
+      setWeekTodos((prev) => (prev ? prev.map((t) => (t.id === id ? { ...t, status: s } : t)) : prev));
+      setRealTasks((prev) => (prev ? prev.map((t) => (t.id === id ? { ...t, status: s } : t)) : prev));
+    };
+    apply(next);
+    // 저장 실패 시 원래 상태로 되돌린다.
+    updateTodoStatus(id, STATUS_TO_API[next]).catch(() => apply(current.status));
+  }
+
+  const handleToggle = userId != null ? toggleReal : onToggle;
+
   const mine = userId != null ? realTasks ?? [] : tasks.filter((t) => t.member === memberId);
 
   if (!person) {
@@ -116,14 +180,18 @@ export default function MemberDetail({
   const cTotal = cDone + cProg + cTodo;
   const w = (n: number) => (cTotal ? (n / cTotal) * 100 : 0) + "%";
 
-  // 금주 담당 일감: 주간 통계의 주(월~일)와 겹치는 일감만. stats가 없으면(시드/로딩) 전체.
-  const weekTasks = stats
-    ? mine.filter((t) => {
-        const start = t.date;
-        const end = t.endDate ?? t.date;
-        return start <= stats.week_end && end >= stats.week_start;
-      })
-    : mine;
+  // 금주 담당 일감: 실 팀원은 전용 API(GET /reports/weekly/todos) 결과를 그대로 사용.
+  // 시드 팀원은 보유 일감 중 이번 주(월~일)와 겹치는 것만 추려서 사용.
+  const weekTasks =
+    userId != null
+      ? weekTodos ?? []
+      : stats
+        ? mine.filter((t) => {
+            const start = t.date;
+            const end = t.endDate ?? t.date;
+            return start <= stats.week_end && end >= stats.week_start;
+          })
+        : mine;
 
   // Show what's live first: not-done before done, earlier dates first.
   const ordered = [...weekTasks].sort(
@@ -185,7 +253,7 @@ export default function MemberDetail({
       <div className="task-list">
         {ordered.length ? (
           ordered.map((t) => (
-            <TaskRow key={t.id} task={t} onToggle={onToggle} currentUser={currentUser} />
+            <TaskRow key={t.id} task={t} onToggle={handleToggle} currentUser={currentUser} />
           ))
         ) : (
           <div className="task-row" style={{ color: "var(--fg-3)", justifyContent: "center" }}>
