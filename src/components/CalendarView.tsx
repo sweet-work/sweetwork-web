@@ -3,18 +3,16 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Icon } from "./primitives";
 import { holidayName } from "@/lib/holidays";
-import { getCalendarTodos, type TodoCalendarItem } from "@/lib/api";
+import { getCalendarTodos, getTodos, type TodoCalendarItem } from "@/lib/api";
 import {
   WEEKDAYS,
   STATUS,
   TODAY,
   TODAY_STR,
-  taskEnd,
   dday,
   ddayColor,
   ddayLabel,
   fmtRange,
-  type Task,
 } from "@/lib/data";
 
 // Backend status enum → event bar color (POSTPONED reuses the board's amber/warn).
@@ -50,31 +48,55 @@ interface Seg {
   lane: number;
 }
 
-function DdayCard({ task }: { task: Task }) {
-  const diff = dday(taskEnd(task));
+function DdayCard({ item }: { item: TodoCalendarItem }) {
+  const diff = dday(item.end_date);
   const color = ddayColor(diff);
   return (
     <div className="dday-card" style={{ "--bar": color } as CSSProperties}>
       <div className="num" style={{ color }}>
         {ddayLabel(diff)}
       </div>
-      <div className="lab">{task.ddayLabel || task.title}</div>
-      <div className="date">{fmtRange(task.date, task.endDate)}</div>
+      <div className="lab">{item.content}</div>
+      <div className="date">{fmtRange(item.start_date, item.end_date > item.start_date ? item.end_date : undefined)}</div>
     </div>
   );
 }
 
-// refreshKey changes whenever a task is added so the month reloads fresh server data.
-export default function CalendarView({ tasks, refreshKey = 0 }: { tasks: Task[]; refreshKey?: number }) {
-  const pinned = tasks.filter((t) => t.pinned).sort((a, b) => dday(taskEnd(a)) - dday(taskEnd(b)));
+// How many upcoming deadlines to surface in the "중요 일정" strip.
+const IMPORTANT_LIMIT = 6;
 
-  // Displayed month; starts on the app's "today" so it lines up with the seeded tasks.
+// refreshKey changes whenever a task is added so the views reload fresh server data.
+export default function CalendarView({ refreshKey = 0 }: { refreshKey?: number }) {
+  // Displayed month; starts on the real "today".
   const [cursor, setCursor] = useState({ year: TODAY.getFullYear(), month: TODAY.getMonth() });
   const { year, month } = cursor;
 
   // Tasks for the displayed month, loaded from GET /todos/calendar.
   const [items, setItems] = useState<TodoCalendarItem[]>([]);
   const [calErr, setCalErr] = useState("");
+
+  // Nearest upcoming deadlines across the whole team — the "중요 일정" strip.
+  const [important, setImportant] = useState<TodoCalendarItem[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    getTodos()
+      .then((res) => {
+        if (!alive) return;
+        // Active (not done / not on-hold) tasks whose deadline is today or later, soonest first.
+        const upcoming = [...res.TODO, ...res.IN_PROGRESS]
+          .filter((it) => dday(it.end_date) >= 0)
+          .sort((a, b) => dday(a.end_date) - dday(b.end_date))
+          .slice(0, IMPORTANT_LIMIT);
+        setImportant(upcoming);
+      })
+      .catch(() => {
+        // The strip just stays empty if this fails; the month grid surfaces its own error.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [refreshKey]);
 
   useEffect(() => {
     let alive = true;
@@ -170,13 +192,19 @@ export default function CalendarView({ tasks, refreshKey = 0 }: { tasks: Task[];
     <div className="fade-in">
       <div className="section-head">
         <h2>중요 일정</h2>
-        <span className="count">D-day</span>
+        <span className="count">다가오는 마감</span>
       </div>
-      <div className="dday-strip">
-        {pinned.map((t) => (
-          <DdayCard key={t.id} task={t} />
-        ))}
-      </div>
+      {important.length > 0 ? (
+        <div className="dday-strip">
+          {important.map((it) => (
+            <DdayCard key={it.id} item={it} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, color: "var(--fg-3)", padding: "2px 2px 22px" }}>
+          다가오는 일정이 없어요.
+        </div>
+      )}
 
       <div className="cal-nav">
         <div className="cal-month">{monthLabel}</div>
