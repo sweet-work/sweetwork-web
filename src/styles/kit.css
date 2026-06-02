@@ -255,6 +255,16 @@ button { font-family: inherit; }
 .t-card:hover { box-shadow: var(--shadow-md); }
 .t-card:active { cursor: grabbing; }
 .t-card.dragging { opacity: 0.45; box-shadow: var(--shadow-md); }
+/* Floating clone that follows the finger during a touch drag (mobile). It's a clone
+   of .t-card, so it inherits the card look; here we just lift it off the page. */
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 1000; margin: 0;
+  pointer-events: none; opacity: 0.96; cursor: grabbing;
+  width: auto; max-width: 92vw;
+  transform: rotate(2deg) scale(1.03);
+  box-shadow: var(--shadow-lg, 0 14px 32px rgba(0, 0, 0, 0.24));
+  will-change: left, top;
+}
 .t-card .ttop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .t-card .ttl { font-size: 13.5px; font-weight: 550; line-height: 1.35; }
 .t-card .tbot { display: flex; align-items: center; gap: 10px; }
@@ -503,3 +513,90 @@ button { font-family: inherit; }
 
 .fade-in { animation: fadeUp var(--dur-slow) var(--ease-out); }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } }
+
+/* ============================================================
+   RESPONSIVE
+   Desktop-first: a fixed 232px sidebar + roomy padding. As the
+   viewport narrows the grids relax to fewer columns and — below
+   the drawer breakpoint — the sidebar slides away into an
+   off-canvas drawer reachable from the topbar hamburger.
+   ============================================================ */
+
+/* Hamburger (topbar) and drawer close (sidebar) are desktop-hidden;
+   each media block below reveals the one it needs. */
+.menu-btn, .sidebar-close { display: none; }
+.topbar-title { min-width: 0; }
+.topbar-title .page-title,
+.topbar-title .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Tablet — tighten the frame, board drops to 2 columns ---------- */
+@media (max-width: 1024px) {
+  .topbar { padding: 12px 20px; }
+  .content { padding: 20px 20px 48px; }
+  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- Drawer breakpoint — sidebar becomes an off-canvas overlay ---------- */
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; height: 100dvh;
+    width: 268px; max-width: 84vw; z-index: 60;
+    transform: translateX(-100%);
+    transition: transform var(--dur-base) var(--ease-out);
+    box-shadow: var(--shadow-lg); overflow-y: auto;
+  }
+  .app.nav-open .sidebar { transform: none; }
+
+  /* Dimmed scrim behind the open drawer; taps fall through to close it. */
+  .nav-backdrop {
+    position: fixed; inset: 0; z-index: 55;
+    background: var(--overlay); backdrop-filter: blur(2px);
+    animation: fade var(--dur-base) var(--ease-out);
+  }
+
+  .menu-btn { display: inline-flex; flex: none; }
+  /* The brand row gains a trailing close button; let the name push it to the edge. */
+  .sidebar-close { display: inline-flex; margin-left: auto; }
+
+  /* Topbar condenses: drop the descriptive subline and the profile name chip. */
+  .topbar { gap: 10px; padding: 11px 16px; }
+  .topbar .sub { display: none; }
+  .topbar .page-title { font-size: 18px; }
+  .profile { background: transparent; border-color: transparent; padding: 0; }
+  .profile .profile-name { display: none; }
+
+  .content { padding: 18px 16px 44px; }
+}
+
+/* ---------- Phone ---------- */
+@media (max-width: 560px) {
+  .topbar { gap: 8px; padding: 10px 13px; }
+  .content { padding: 16px 13px 40px; }
+
+  /* "일감 추가" collapses to just its + icon to reclaim the row. */
+  .topbar .btn-primary .btn-label { display: none; }
+  .topbar .btn-primary { padding: 9px; }
+
+  /* Single-column board (overrides the tablet 2-col rule above). */
+  .board { grid-template-columns: 1fr; }
+
+  .report-metrics { grid-template-columns: 1fr; }
+  .report-card { padding: 20px 18px; }
+  .report-card h1 { font-size: 20px; }
+
+  /* Calendar keeps its 7 columns but relaxes density so a phone width still fits. */
+  .cal-cell { min-height: 76px; padding: 5px 5px 14px; }
+  .cal-week.head div { padding: 7px 5px; font-size: 11px; }
+  .cal-cell .chead .cal-holiday { display: none; }
+  .cal-events { top: 26px; }
+  .cal-bar { font-size: 10.5px; padding: 0 4px; }
+
+  .member-hero { gap: 11px; }
+  .member-hero .who h1 { font-size: 20px; }
+  .section-head { flex-wrap: wrap; }
+
+  /* Date-range inputs stack so they don't overflow a narrow modal. */
+  .form-row { flex-direction: column; gap: 14px; }
+}

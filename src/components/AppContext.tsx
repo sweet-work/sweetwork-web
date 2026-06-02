@@ -1,6 +1,7 @@
 "use client";
 /* Cadence — app provider: auth gate, theme, shared task state, app shell. */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import Login from "./Login";
 import { Sidebar, TopBar, NewTaskModal, type NewTaskInput } from "./AppShell";
 import { createTodo, getMyTeamMembers } from "@/lib/api";
@@ -40,8 +41,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState("light");
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
   const [modal, setModal] = useState(false);
+  // Mobile only: whether the off-canvas sidebar drawer is open (ignored on desktop, where the sidebar is always visible).
+  const [navOpen, setNavOpen] = useState(false);
+  const pathname = usePathname();
   // Becomes true once we've checked storage for a saved session — avoids a Login flash on refresh.
   const [ready, setReady] = useState(false);
+
+  // Close the mobile drawer whenever the route changes (e.g. after tapping a nav item).
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
+  // While the drawer is open, lock background scroll so only the drawer scrolls.
+  useEffect(() => {
+    if (!navOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [navOpen]);
 
   // Restore a signed-in user persisted on this device.
   useEffect(() => {
@@ -159,8 +178,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{ currentUser: user, members, tasks, toggleTask, addTask }}>
-      <div className="app">
-        <Sidebar currentUser={user} members={members} />
+      <div className={"app" + (navOpen ? " nav-open" : "")}>
+        <Sidebar currentUser={user} members={members} onClose={() => setNavOpen(false)} />
+        {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
         <div className="main">
           <TopBar
             user={user}
@@ -168,6 +188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             toggleTheme={toggleTheme}
             onNewTask={() => setModal(true)}
             onLogout={logout}
+            onMenu={() => setNavOpen(true)}
           />
           <div className="content">{children}</div>
         </div>
