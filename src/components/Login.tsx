@@ -2,13 +2,10 @@
 /* Cadence — Login screen. Company-email only; unknown emails are created on the spot. */
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Icon, Mark } from "./primitives";
-import { login, signup, type AuthResponse } from "@/lib/api";
+import { login, signup, getTeams, createTeam, type AuthResponse, type Team } from "@/lib/api";
 
 // Where we remember the last email used to sign in, so we can pre-fill it next time.
 const LAST_EMAIL_KEY = "cadence-last-email";
-// Teams to choose from at sign-up. Defaults plus anything the user has created on this device.
-const TEAMS_KEY = "cadence-teams";
-const DEFAULT_TEAMS = ["개발팀", "디자인팀", "기획팀", "마케팅팀", "경영지원팀"];
 
 /* Team picker styled like a .field, with a "+ 팀 추가하기" action pinned to the top of the
    dropdown so a new team can be created inline when the desired one isn't listed. */
@@ -19,10 +16,10 @@ function TeamSelect({
   onCreate,
   disabled,
 }: {
-  teams: string[];
-  value: string;
-  onChange: (team: string) => void;
-  onCreate: (team: string) => void;
+  teams: Team[];
+  value: Team | null;
+  onChange: (team: Team) => void;
+  onCreate: (name: string) => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -62,7 +59,9 @@ function TeamSelect({
         onClick={() => setOpen((o) => !o)}
       >
         <Icon name="users" size={17} />
-        <span className={"team-value" + (value ? "" : " placeholder")}>{value || "팀을 선택하세요"}</span>
+        <span className={"team-value" + (value ? "" : " placeholder")}>
+          {value ? value.name : "팀을 선택하세요"}
+        </span>
         <Icon name="chevron-down" size={16} className="team-caret" />
       </button>
 
@@ -112,15 +111,15 @@ function TeamSelect({
             {teams.map((t) => (
               <button
                 type="button"
-                key={t}
-                className={"team-option" + (t === value ? " selected" : "")}
+                key={t.id}
+                className={"team-option" + (t.id === value?.id ? " selected" : "")}
                 onClick={() => {
                   onChange(t);
                   setOpen(false);
                 }}
               >
-                {t}
-                {t === value && <Icon name="check" size={15} />}
+                {t.name}
+                {t.id === value?.id && <Icon name="check" size={15} />}
               </button>
             ))}
           </div>
@@ -137,8 +136,8 @@ export default function Login({
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [team, setTeam] = useState("");
-  const [teams, setTeams] = useState<string[]>(DEFAULT_TEAMS);
+  const [team, setTeam] = useState<Team | null>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   // Revealed when the email isn't registered yet and we need a name to create the account.
@@ -155,33 +154,42 @@ export default function Login({
     }
   }, []);
 
-  // Load any teams created earlier on this device, merged with the defaults.
+  // Load the team list from the backend once we ask the user for a name (sign-up step).
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(TEAMS_KEY) ?? "[]") as string[];
-      if (Array.isArray(saved) && saved.length) {
-        setTeams([...DEFAULT_TEAMS, ...saved.filter((t) => !DEFAULT_TEAMS.includes(t))]);
-      }
-    } catch {
-      /* ignore malformed storage */
-    }
-  }, []);
+    if (!needsName) return;
+    let cancelled = false;
+    getTeams()
+      .then((list) => {
+        if (!cancelled) setTeams(list);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(e instanceof Error ? e.message : "팀 목록을 불러오지 못했어요.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsName]);
 
-  // Add a brand-new team, persist the user-created ones, and select it.
-  function createTeam(rawName: string) {
-    const name = rawName.trim();
-    if (!name || teams.includes(name)) {
-      if (name) setTeam(name);
+  // Create a brand-new team on the backend, add it to the list, and select it.
+  async function addTeam(rawName: string) {
+    const trimmed = rawName.trim();
+    if (!trimmed) return;
+    // Reuse an existing team with the same name instead of creating a duplicate.
+    const existing = teams.find((t) => t.name === trimmed);
+    if (existing) {
+      setTeam(existing);
       return;
     }
-    setTeams((prev) => [...prev, name]);
-    setTeam(name);
+    setLoading(true);
     setErr("");
     try {
-      const saved = JSON.parse(localStorage.getItem(TEAMS_KEY) ?? "[]") as string[];
-      localStorage.setItem(TEAMS_KEY, JSON.stringify([...saved, name]));
-    } catch {
-      localStorage.setItem(TEAMS_KEY, JSON.stringify([name]));
+      const created = await createTeam(trimmed);
+      setTeams((prev) => (prev.some((t) => t.id === created.id) ? prev : [...prev, created]));
+      setTeam(created);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "팀 생성에 실패했어요.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -215,7 +223,7 @@ export default function Login({
     setErr("");
     try {
       if (needsName) {
-        const data = await signup(email, name.trim(), team);
+        const data = await signup(email, name.trim(), team!.id);
         rememberEmail(email);
         onLogin(email, data);
         return;
@@ -310,7 +318,7 @@ export default function Login({
                 setTeam(t);
                 setErr("");
               }}
-              onCreate={createTeam}
+              onCreate={addTeam}
               disabled={loading}
             />
           </div>

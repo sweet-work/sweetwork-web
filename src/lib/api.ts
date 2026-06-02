@@ -34,10 +34,47 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-/** Shape returned by POST /login and POST /signup. */
+/** Shape returned by POST /login and POST /signup. team_id/team_name come with both
+    (login's may be null when the user has no team yet). */
 export interface AuthResponse {
   id: number;
   name: string;
+  team_id?: number | null;
+  team_name?: string | null;
+}
+
+/** A team as returned by GET /teams and POST /teams. */
+export interface Team {
+  id: number;
+  name: string;
+}
+
+/** GET /teams — the teams shown in the sign-up team picker. */
+export async function getTeams(): Promise<Team[]> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/teams`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** POST /teams with { name } — creates a new team and returns it (id + name). */
+export async function createTeam(name: string): Promise<Team> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/teams`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("팀 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
 }
 
 /** POST /login with { email }. Returns null when the email is unknown (HTTP 401). */
@@ -57,14 +94,14 @@ export async function login(email: string): Promise<AuthResponse | null> {
   return res.json();
 }
 
-/** POST /signup with { email, name }. An optional team is sent along for the user's profile. */
-export async function signup(email: string, name: string, team?: string): Promise<AuthResponse> {
+/** POST /signup with { email, name, team_id } — registers the user under the chosen team. */
+export async function signup(email: string, name: string, teamId: number): Promise<AuthResponse> {
   let res: Response;
   try {
     res = await apiFetch(`${API_BASE}/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(team ? { email, name, team } : { email, name }),
+      body: JSON.stringify({ email, name, team_id: teamId }),
     });
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");

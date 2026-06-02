@@ -26,6 +26,9 @@ export interface CurrentUser {
   name: string;
   initials: string;
   color: string;
+  // The user's team, from login/signup — used for the team weekly report.
+  teamId?: number;
+  teamName?: string;
 }
 
 // "Today" — the real current date (normalized to local midnight so D-day math is clean).
