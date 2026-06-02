@@ -22,7 +22,16 @@ export function viewFromPath(pathname: string): View {
   return (NAV.some((n) => n.id === seg) ? seg : "dashboard") as View;
 }
 
-export function Sidebar({ currentUser, members }: { currentUser: CurrentUser; members: Member[] }) {
+export function Sidebar({
+  currentUser,
+  members,
+  onClose,
+}: {
+  currentUser: CurrentUser;
+  members: Member[];
+  // Mobile drawer: closes the off-canvas sidebar. No-op on desktop (button is CSS-hidden).
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
   const active = viewFromPath(pathname);
   const activeMember = pathname.startsWith("/member/") ? pathname.split("/")[2] : null;
@@ -31,6 +40,9 @@ export function Sidebar({ currentUser, members }: { currentUser: CurrentUser; me
       <div className="brand">
         <Mark size={32} radius={9} />
         <span className="name">Cadence</span>
+        <button className="icon-btn sidebar-close" onClick={onClose} title="메뉴 닫기">
+          <Icon name="x" size={18} />
+        </button>
       </div>
 
       {NAV.map((n) => (
@@ -96,12 +108,15 @@ export function TopBar({
   toggleTheme,
   onNewTask,
   onLogout,
+  onMenu,
 }: {
   user: CurrentUser;
   theme: string;
   toggleTheme: () => void;
   onNewTask: () => void;
   onLogout: () => void;
+  // Mobile: opens the off-canvas sidebar drawer (hamburger is CSS-hidden on desktop).
+  onMenu?: () => void;
 }) {
   const pathname = usePathname();
   let meta = TITLES[viewFromPath(pathname)];
@@ -111,7 +126,10 @@ export function TopBar({
   }
   return (
     <header className="topbar">
-      <div>
+      <button className="icon-btn menu-btn" onClick={onMenu} title="메뉴 열기">
+        <Icon name="menu" size={18} />
+      </button>
+      <div className="topbar-title">
         <div className="page-title">{meta.t}</div>
         <div className="sub">{meta.s}</div>
       </div>
@@ -120,7 +138,7 @@ export function TopBar({
         <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
       </button>
       <button className="btn btn-primary btn-sm" onClick={onNewTask}>
-        <Icon name="plus" size={16} /> 일감 추가
+        <Icon name="plus" size={16} /> <span className="btn-label">일감 추가</span>
       </button>
       <div className="profile">
         <Avatar member={user} size={28} />
