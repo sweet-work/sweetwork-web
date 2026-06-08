@@ -1,10 +1,18 @@
 "use client";
 /* Cadence — app provider: auth gate, theme, shared task state, app shell. */
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Login from "./Login";
 import { Sidebar, TopBar, NewTaskModal, type NewTaskInput } from "./AppShell";
-import { createTodo, getMyTeamMembers } from "@/lib/api";
+import {
+  createTodo,
+  getMyTeamMembers,
+  getNotifications,
+  getUnreadCount,
+  readNotification,
+  readAllNotifications,
+  type NotificationItem,
+} from "@/lib/api";
 import { tasks as seedTasks, memberFromUser, type CurrentUser, type Member, type Status, type Task } from "@/lib/data";
 
 interface AppContextValue {
@@ -14,6 +22,9 @@ interface AppContextValue {
   tasks: Task[];
   toggleTask: (id: number) => void;
   addTask: (t: NewTaskInput) => Promise<void>;
+  // A task the board should open (set when a notification is tapped). Board clears it once consumed.
+  focusTaskId: number | null;
+  clearFocusTask: () => void;
 }
 
 // Map the backend's status enum onto our local Status (POSTPONED has no local equivalent → todo).
@@ -41,9 +52,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState("light");
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
   const [modal, setModal] = useState(false);
+  // In-app notifications + unread badge count for the TopBar bell.
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  // A task id the board should open, set when a notification is tapped (see openTask).
+  const [focusTaskId, setFocusTaskId] = useState<number | null>(null);
   // Mobile only: whether the off-canvas sidebar drawer is open (ignored on desktop, where the sidebar is always visible).
   const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   // Becomes true once we've checked storage for a saved session — avoids a Login flash on refresh.
   const [ready, setReady] = useState(false);
 
@@ -101,6 +118,89 @@ export function AppProvider({ children }: { children: ReactNode }) {
       alive = false;
     };
   }, [user]);
+
+  // Pull the full notification list + unread count (on login, and when the panel opens).
+  const refreshNotifications = useCallback(async () => {
+    if (!user) return;
+    const uid = Number(user.id);
+    try {
+      const [list, count] = await Promise.all([getNotifications(uid), getUnreadCount(uid)]);
+      setNotifications(list);
+      setUnreadCount(count);
+    } catch {
+      /* keep the last good state; a later poll/open will retry */
+    }
+  }, [user]);
+
+  // Load notifications once on login, then poll just the unread count (cheap) every 60s while
+  // the tab is visible — avoids re-pulling the whole list and waking the slow backend in the bg.
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    const uid = Number(user.id);
+    let alive = true;
+    (async () => {
+      try {
+        const [list, count] = await Promise.all([getNotifications(uid), getUnreadCount(uid)]);
+        if (!alive) return;
+        setNotifications(list);
+        setUnreadCount(count);
+      } catch {
+        /* surface nothing; the badge just stays at its last value */
+      }
+    })();
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      getUnreadCount(uid)
+        .then((c) => {
+          if (alive) setUnreadCount(c);
+        })
+        .catch(() => {});
+    }, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [user]);
+
+  // Mark one alert read — optimistic, rolled back if the PATCH fails.
+  async function markNotificationRead(id: number) {
+    if (!user) return;
+    const target = notifications.find((n) => n.id === id);
+    if (!target || target.status === "READ") return;
+    setNotifications((ns) => ns.map((n) => (n.id === id ? { ...n, status: "READ" as const } : n)));
+    setUnreadCount((c) => Math.max(0, c - 1));
+    try {
+      await readNotification(id, Number(user.id));
+    } catch {
+      setNotifications((ns) => ns.map((n) => (n.id === id ? { ...n, status: "UNREAD" as const } : n)));
+      setUnreadCount((c) => c + 1);
+    }
+  }
+
+  // Mark every alert read — optimistic, rolled back if the PATCH fails.
+  async function markAllNotificationsRead() {
+    if (!user || unreadCount === 0) return;
+    const prev = notifications;
+    const prevCount = unreadCount;
+    setNotifications((ns) => ns.map((n) => ({ ...n, status: "READ" as const })));
+    setUnreadCount(0);
+    try {
+      await readAllNotifications(Number(user.id));
+    } catch {
+      setNotifications(prev);
+      setUnreadCount(prevCount);
+    }
+  }
+
+  // Tapped a notification: remember its task and head to the board, which opens that task's detail.
+  function openTask(todoId: number) {
+    setFocusTaskId(todoId);
+    router.push("/board");
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem("cadence-theme");
@@ -177,7 +277,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppContext.Provider value={{ currentUser: user, members, tasks, toggleTask, addTask }}>
+    <AppContext.Provider
+      value={{ currentUser: user, members, tasks, toggleTask, addTask, focusTaskId, clearFocusTask: () => setFocusTaskId(null) }}
+    >
       <div className={"app" + (navOpen ? " nav-open" : "")}>
         <Sidebar currentUser={user} members={members} onClose={() => setNavOpen(false)} />
         {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
@@ -189,6 +291,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             onNewTask={() => setModal(true)}
             onLogout={logout}
             onMenu={() => setNavOpen(true)}
+            notif={{
+              items: notifications,
+              unread: unreadCount,
+              onRead: markNotificationRead,
+              onReadAll: markAllNotificationsRead,
+              onRefresh: refreshNotifications,
+              onOpenTask: openTask,
+            }}
           />
           <div className="content">{children}</div>
         </div>

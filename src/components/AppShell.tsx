@@ -5,7 +5,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, Avatar, Mark } from "./primitives";
 import TopProgressBar from "./TopProgressBar";
+import NotificationCenter from "./NotificationCenter";
 import { personById, TODAY_STR, type CurrentUser, type Member } from "@/lib/data";
+import type { NotificationItem } from "@/lib/api";
+
+/** Notification state + handlers the TopBar bell needs, threaded down from AppProvider. */
+export interface NotifProps {
+  items: NotificationItem[];
+  unread: number;
+  onRead: (id: number) => void;
+  onReadAll: () => void;
+  onRefresh: () => void;
+  onOpenTask: (todoId: number) => void;
+}
 
 export type View = "dashboard" | "board" | "calendar" | "report";
 
@@ -109,6 +121,7 @@ export function TopBar({
   onNewTask,
   onLogout,
   onMenu,
+  notif,
 }: {
   user: CurrentUser;
   theme: string;
@@ -117,6 +130,7 @@ export function TopBar({
   onLogout: () => void;
   // Mobile: opens the off-canvas sidebar drawer (hamburger is CSS-hidden on desktop).
   onMenu?: () => void;
+  notif: NotifProps;
 }) {
   const pathname = usePathname();
   let meta = TITLES[viewFromPath(pathname)];
@@ -140,6 +154,14 @@ export function TopBar({
       <button className="btn btn-primary btn-sm" onClick={onNewTask}>
         <Icon name="plus" size={16} /> <span className="btn-label">일감 추가</span>
       </button>
+      <NotificationCenter
+        items={notif.items}
+        unread={notif.unread}
+        onRead={notif.onRead}
+        onReadAll={notif.onReadAll}
+        onRefresh={notif.onRefresh}
+        onOpenTask={notif.onOpenTask}
+      />
       <div className="profile">
         <Avatar member={user} size={28} />
         <span className="profile-name">{user.name}</span>

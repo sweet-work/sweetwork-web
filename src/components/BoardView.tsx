@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { dday, ddayColor, ddayLabel, fmtRange, STATUS } from "@/lib/data";
 import { loadDetail, saveDetail, clearDetail, type TaskDetail } from "@/lib/taskDetail";
+import { useApp } from "./AppContext";
 
 // Done/total for a checklist (card badge + modal progress bar).
 function progressOf(list: Checklist[]): { done: number; total: number } {
@@ -656,6 +657,8 @@ export default function BoardView({
   const tasksRef = useRef<BoardTask[] | null>(tasks);
   tasksRef.current = tasks;
   const moveTaskRef = useRef<(id: number, toCol: BoardCol) => void>(() => {});
+  // A notification can ask the board to open a specific task; we consume + clear that signal.
+  const { focusTaskId, clearFocusTask } = useApp();
 
   // Close an open card menu when clicking anywhere outside it.
   useEffect(() => {
@@ -823,6 +826,15 @@ export default function BoardView({
       alive = false;
     };
   }, [refreshKey, loginUserId]);
+
+  // Open the task a notification pointed at, once the board's tasks have loaded. Clear the
+  // signal either way so navigating away and back doesn't reopen it (and a missing task — e.g.
+  // a teammate's, or a deleted one — just clears quietly).
+  useEffect(() => {
+    if (focusTaskId == null || !tasks) return;
+    if (tasks.some((t) => t.id === focusTaskId)) openDetail(focusTaskId);
+    clearFocusTask();
+  }, [focusTaskId, tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Move a card to a column: optimistic update + PATCH, with rollback on failure.
   // Shared by HTML5 drag-drop (desktop) and the touch drag (mobile) so both paths

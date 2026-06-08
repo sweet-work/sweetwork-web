@@ -500,3 +500,79 @@ export async function createTeamWeeklyReport(teamId: number): Promise<TeamWeekly
   if (!res.ok) throw new Error("팀 주간 보고 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
   return res.json();
 }
+
+/** Notification category — all alerts are task-deadline reminders. */
+export type NotificationType = "DUE_3_DAYS_BEFORE" | "DUE_1_DAY_BEFORE" | "DUE_TODAY" | "OVERDUE";
+
+/** One in-app notification, as returned by the notification endpoints. */
+export interface NotificationItem {
+  id: number;
+  todo_id: number;
+  user_id: number;
+  type: NotificationType;
+  channel: "IN_APP";
+  title: string;
+  message: string;
+  due_date: string; // YYYY-MM-DD
+  status: "UNREAD" | "READ";
+  read_at: string | null; // ISO datetime, set when read
+  created_at: string; // ISO datetime
+}
+
+/** GET /notifications?user_id=&status= — the user's in-app alerts (optionally filtered by status). */
+export async function getNotifications(
+  userId: number,
+  status?: "UNREAD" | "READ",
+): Promise<NotificationItem[]> {
+  const params = new URLSearchParams({ user_id: String(userId) });
+  if (status) params.set("status", status);
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/notifications?${params.toString()}`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("알림을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** GET /notifications/unread-count?user_id= — count of the user's unread in-app alerts. */
+export async function getUnreadCount(userId: number): Promise<number> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/notifications/unread-count?user_id=${userId}`);
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("알림 개수를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+  const data: { user_id: number; unread_count: number } = await res.json();
+  return data.unread_count;
+}
+
+/** PATCH /notifications/{id}/read?user_id= — marks a single alert as read. */
+export async function readNotification(
+  notificationId: number,
+  userId: number,
+): Promise<NotificationItem> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/notifications/${notificationId}/read?user_id=${userId}`, {
+      method: "PATCH",
+    });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("알림 읽음 처리에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  return res.json();
+}
+
+/** PATCH /notifications/read-all?user_id= — marks all of the user's alerts read (204 No Content). */
+export async function readAllNotifications(userId: number): Promise<void> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_BASE}/notifications/read-all?user_id=${userId}`, { method: "PATCH" });
+  } catch {
+    throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
+  }
+  if (!res.ok) throw new Error("알림 읽음 처리에 실패했어요. 잠시 후 다시 시도해 주세요.");
+}
