@@ -22,8 +22,63 @@ export function onApiLoading(fn: (active: boolean) => void): () => void {
   };
 }
 
-/** fetch wrapper that maintains the in-flight counter for the global progress bar. */
-async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+// ---- Auth tokens ----
+// The backend now issues a JWT pair on login/signup; the access token authorizes every
+// protected call, and the refresh token mints a new pair when the access token expires.
+// Tokens live in memory and are mirrored to localStorage so a refresh survives reloads.
+const TOKENS_KEY = "cadence-tokens";
+let accessToken: string | null = null;
+let refreshTokenValue: string | null = null;
+
+if (typeof window !== "undefined") {
+  try {
+    const raw = localStorage.getItem(TOKENS_KEY);
+    if (raw) {
+      const t = JSON.parse(raw) as { access_token?: string; refresh_token?: string };
+      accessToken = t.access_token ?? null;
+      refreshTokenValue = t.refresh_token ?? null;
+    }
+  } catch {
+    /* corrupt entry — start unauthenticated */
+  }
+}
+
+/** Store a fresh token pair (called after login/signup/refresh). */
+export function setAuthTokens(access: string, refresh: string) {
+  accessToken = access;
+  refreshTokenValue = refresh;
+  try {
+    localStorage.setItem(TOKENS_KEY, JSON.stringify({ access_token: access, refresh_token: refresh }));
+  } catch {
+    /* storage unavailable — keep the in-memory copy */
+  }
+}
+
+/** Forget the stored tokens (on logout, or when the refresh token is rejected). */
+export function clearAuthTokens() {
+  accessToken = null;
+  refreshTokenValue = null;
+  try {
+    localStorage.removeItem(TOKENS_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Fired when the session can't be recovered (refresh token expired/invalid) so the app
+// can drop the user back to the login screen.
+const authExpiredListeners = new Set<() => void>();
+
+/** Subscribe to "session expired" so the UI can sign the user out. Returns an unsubscribe fn. */
+export function onAuthExpired(fn: () => void): () => void {
+  authExpiredListeners.add(fn);
+  return () => {
+    authExpiredListeners.delete(fn);
+  };
+}
+
+/** Raw fetch with just the in-flight counter (no auth, no refresh) — used for the token calls. */
+async function rawFetch(input: string, init?: RequestInit): Promise<Response> {
   inFlight++;
   emitLoading();
   try {
@@ -34,13 +89,84 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-/** Shape returned by POST /login and POST /signup. team_id/team_name come with both
-    (login's may be null when the user has no team yet). */
-export interface AuthResponse {
+// Attach the bearer token (if any) without clobbering caller-supplied headers.
+function withAuth(init?: RequestInit): RequestInit {
+  if (!accessToken) return init ?? {};
+  return {
+    ...init,
+    headers: { ...(init?.headers as Record<string, string> | undefined), Authorization: `Bearer ${accessToken}` },
+  };
+}
+
+// A single in-flight refresh shared by every call that 401s at the same time.
+let refreshing: Promise<boolean> | null = null;
+async function tryRefresh(): Promise<boolean> {
+  if (!refreshTokenValue) return false;
+  if (!refreshing) {
+    refreshing = (async () => {
+      try {
+        const res = await rawFetch(`${API_BASE}/token/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshTokenValue }),
+        });
+        if (!res.ok) return false;
+        const data = (await res.json()) as AuthResponse;
+        setAuthTokens(data.access_token, data.refresh_token);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshing = null;
+      }
+    })();
+  }
+  return refreshing;
+}
+
+/** fetch wrapper: in-flight counter for the progress bar + bearer auth with one
+    transparent refresh-and-retry when the access token has expired. */
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  let res = await rawFetch(input, withAuth(init));
+  // Only protected calls can recover via refresh; the auth endpoints handle their own 401s.
+  const isAuthCall = input.includes("/login") || input.includes("/signup") || input.includes("/token/refresh");
+  if (res.status === 401 && accessToken && !isAuthCall) {
+    if (await tryRefresh()) {
+      res = await rawFetch(input, withAuth(init));
+    } else {
+      clearAuthTokens();
+      authExpiredListeners.forEach((fn) => fn());
+    }
+  }
+  return res;
+}
+
+/** The signed-in user, nested inside every auth response.
+    team_id/team_name may be null when the user has no team yet. */
+export interface AuthUser {
   id: number;
   name: string;
   team_id?: number | null;
   team_name?: string | null;
+}
+
+/** Shape returned by POST /login, POST /signup, and POST /token/refresh:
+    a JWT pair plus the signed-in user. */
+export interface AuthResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  user: AuthUser;
+}
+
+/** Thrown by login() on HTTP 401. The backend returns the same "Invalid credentials"
+    for an unknown email and a wrong password, so the UI can't tell them apart — it
+    offers account creation as the next step. */
+export class InvalidCredentialsError extends Error {
+  constructor(message = "이메일 또는 비밀번호가 올바르지 않아요.") {
+    super(message);
+    this.name = "InvalidCredentialsError";
+  }
 }
 
 /** A team as returned by GET /teams and POST /teams. */
@@ -98,37 +224,67 @@ export async function getMyTeamMembers(userId: number): Promise<TeamMember[]> {
   return res.json();
 }
 
-/** POST /login with { email }. Returns null when the email is unknown (HTTP 401). */
-export async function login(email: string): Promise<AuthResponse | null> {
+/** POST /login with { email, password }. Returns the token pair + user (tokens are
+    stored for subsequent calls). Throws InvalidCredentialsError on HTTP 401. */
+export async function login(email: string, password: string): Promise<AuthResponse> {
   let res: Response;
   try {
     res = await apiFetch(`${API_BASE}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, password }),
     });
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
   }
-  if (res.status === 401) return null; // not registered yet
+  if (res.status === 401) throw new InvalidCredentialsError();
   if (!res.ok) throw new Error("로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
-  return res.json();
+  const data: AuthResponse = await res.json();
+  setAuthTokens(data.access_token, data.refresh_token);
+  return data;
 }
 
-/** POST /signup with { email, name, team_id } — registers the user under the chosen team. */
-export async function signup(email: string, name: string, teamId: number): Promise<AuthResponse> {
+/** POST /signup with { email, password, name, team_id } — registers the user under the
+    chosen team and signs them in (tokens are stored for subsequent calls). */
+export async function signup(
+  email: string,
+  password: string,
+  name: string,
+  teamId: number,
+): Promise<AuthResponse> {
   let res: Response;
   try {
     res = await apiFetch(`${API_BASE}/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name, team_id: teamId }),
+      body: JSON.stringify({ email, password, name, team_id: teamId }),
     });
   } catch {
     throw new Error("서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.");
   }
   if (!res.ok) throw new Error("계정 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
-  return res.json();
+  const data: AuthResponse = await res.json();
+  setAuthTokens(data.access_token, data.refresh_token);
+  return data;
+}
+
+/** POST /logout — best-effort invalidation of the refresh token on the server.
+    Always clears the local tokens, even if the network call fails. */
+export async function logout(): Promise<void> {
+  const token = refreshTokenValue;
+  try {
+    if (token) {
+      await rawFetch(`${API_BASE}/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: token }),
+      });
+    }
+  } catch {
+    /* server unreachable — local sign-out below still happens */
+  } finally {
+    clearAuthTokens();
+  }
 }
 
 /** Body for POST /todos. Dates are "YYYY-MM-DD". */
