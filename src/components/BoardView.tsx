@@ -68,7 +68,7 @@ const COL_META: Record<BoardCol, { label: string; color: string }> = {
 };
 
 // Left-to-right column order on the board.
-const COLS: BoardCol[] = ["todo", "progress", "postponed", "done"];
+const COLS: BoardCol[] = ["todo", "progress", "done", "postponed"];
 
 function personOf(it: TodoBoardItem): Person {
   return {
