@@ -333,6 +333,12 @@ button { font-family: inherit; }
   transition: background var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-fast);
 }
 .dt-memo::placeholder { color: var(--fg-3); }
+/* Read-only memo (calendar detail) — same paper well, but plain text, not editable. */
+.dt-memo-readonly {
+  margin: 0; white-space: pre-wrap; word-break: break-word;
+  background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: 11px 13px; font-size: 13.5px; line-height: 1.6; color: var(--fg-1);
+}
 /* On focus the paper lifts forward (white surface) with the accent ring. */
 .dt-memo:focus {
   outline: none; background: var(--surface-1);
@@ -394,10 +400,35 @@ button { font-family: inherit; }
   padding: 0 7px; font-size: 11.5px; font-weight: 500; color: var(--fg-1);
   background: color-mix(in srgb, var(--ev, var(--status-todo)) 16%, var(--surface-1));
   border-left: 3px solid var(--ev, var(--status-todo)); border-radius: 5px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab;
   transition: background var(--dur-fast);
+  touch-action: none; /* let the long-press drag own the gesture instead of scrolling */
 }
 .cal-bar:hover { background: color-mix(in srgb, var(--ev, var(--status-todo)) 28%, var(--surface-1)); }
+.cal-bar:active { cursor: grabbing; }
+.cal-bar.dragging { opacity: 0.4; }
+/* Day cell highlighted as the drop target while a task is being dragged. */
+.cal-cell.drop-over { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+/* A day with tasks is clickable — it opens that day's full task list. */
+.cal-cell.has-tasks { cursor: pointer; }
+.cal-cell.has-tasks:hover { background: var(--surface-2); }
+.cal-cell.out.has-tasks:hover { background: var(--surface-2); }
+
+/* Day-list popup rows (one task each; click opens the detail). */
+.day-list { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow-y: auto; }
+.day-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 9px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  background: var(--surface-1); cursor: pointer; transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+.day-row:hover { background: var(--surface-2); border-color: var(--border); }
+.day-row > .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.day-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.day-row-title { font-size: 13.5px; font-weight: 550; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-row-sub { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg-2); }
+.day-row-date { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-3); }
+.day-row-date .ic { width: 12px; height: 12px; }
+.day-row .dday-chip { flex: none; }
 /* Continues from the previous week → flat left edge, reaches the cell edge. */
 .cal-bar[data-start="false"] { border-left-width: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; padding-left: 8px; }
 /* Continues into the next week → flat right edge, reaches the cell edge. */
