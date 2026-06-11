@@ -11,6 +11,8 @@ import {
   getUnreadCount,
   readNotification,
   readAllNotifications,
+  logout as apiLogout,
+  onAuthExpired,
   type NotificationItem,
 } from "@/lib/api";
 import { tasks as seedTasks, memberFromUser, type CurrentUser, type Member, type Status, type Task } from "@/lib/data";
@@ -90,6 +92,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     setReady(true);
+  }, []);
+
+  // If the session can't be refreshed (refresh token expired/rejected), drop to login.
+  useEffect(() => {
+    return onAuthExpired(() => {
+      localStorage.removeItem(USER_KEY);
+      setUser(null);
+    });
   }, []);
 
   // Load the signed-in user's team roster for the sidebar (includes the user themselves).
@@ -216,6 +226,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    apiLogout().catch(() => {}); // best-effort server-side invalidation; tokens cleared regardless
     localStorage.removeItem(USER_KEY);
     setUser(null);
   }
@@ -260,14 +271,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return (
       <Login
         onLogin={(email, data) => {
+          const u = data.user;
           const next: CurrentUser = {
-            id: String(data.id),
+            id: String(u.id),
             email,
-            name: data.name,
-            initials: data.name.slice(0, 2).toUpperCase(),
+            name: u.name,
+            initials: u.name.slice(0, 2).toUpperCase(),
             color: "#6AA823",
-            teamId: data.team_id ?? undefined,
-            teamName: data.team_name ?? undefined,
+            teamId: u.team_id ?? undefined,
+            teamName: u.team_name ?? undefined,
           };
           localStorage.setItem(USER_KEY, JSON.stringify(next));
           setUser(next);

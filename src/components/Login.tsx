@@ -1,8 +1,16 @@
 "use client";
-/* Cadence — Login screen. Company-email only; unknown emails are created on the spot. */
+/* Cadence — Login screen. Company email + password; first-timers create an account inline. */
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Icon, Mark } from "./primitives";
-import { login, signup, getTeams, createTeam, type AuthResponse, type Team } from "@/lib/api";
+import {
+  login,
+  signup,
+  getTeams,
+  createTeam,
+  InvalidCredentialsError,
+  type AuthResponse,
+  type Team,
+} from "@/lib/api";
 
 // Where we remember the last email used to sign in, so we can pre-fill it next time.
 const LAST_EMAIL_KEY = "cadence-last-email";
@@ -135,12 +143,14 @@ export default function Login({
   onLogin: (email: string, data: AuthResponse) => void;
 }) {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [name, setName] = useState("");
   const [team, setTeam] = useState<Team | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  // Revealed when the email isn't registered yet and we need a name to create the account.
+  // Revealed when creating a new account (the email isn't registered) — collects name + team.
   const [needsName, setNeedsName] = useState(false);
   // "Remember email" — when on, we persist the email for next time.
   const [remember, setRemember] = useState(false);
@@ -199,13 +209,32 @@ export default function Login({
     else localStorage.removeItem(LAST_EMAIL_KEY);
   }
 
+  const emailValid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+
+  // Move from the login step to the account-creation step (name + team). Email/password
+  // aren't required to advance — they stay editable there and are validated on submit.
+  function goToRegister() {
+    if (loading) return;
+    setErr("");
+    setNeedsName(true);
+  }
+
+  // Back from account-creation to the login step.
+  function backToLogin() {
+    setNeedsName(false);
+    setErr("");
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (loading) return;
 
-    const ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
-    if (!ok) {
+    if (!emailValid) {
       setErr("회사 이메일 형식을 확인해 주세요");
+      return;
+    }
+    if (!password) {
+      setErr("비밀번호를 입력해 주세요");
       return;
     }
 
@@ -213,7 +242,6 @@ export default function Login({
       setErr("이름을 입력해 주세요");
       return;
     }
-
     if (needsName && !team) {
       setErr("팀을 선택해 주세요");
       return;
@@ -223,23 +251,23 @@ export default function Login({
     setErr("");
     try {
       if (needsName) {
-        const data = await signup(email, name.trim(), team!.id);
+        const data = await signup(email, password, name.trim(), team!.id);
         rememberEmail(email);
         onLogin(email, data);
         return;
       }
 
-      const existing = await login(email);
-      if (existing) {
-        rememberEmail(email);
-        onLogin(email, existing);
-        return;
-      }
-      // New email — ask for a name, then submit again to sign up.
-      setNeedsName(true);
-      setLoading(false);
+      const data = await login(email, password);
+      rememberEmail(email);
+      onLogin(email, data);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "로그인에 실패했어요.");
+      // The backend can't distinguish an unknown email from a wrong password, so on a
+      // credentials failure we nudge first-timers toward creating an account below.
+      if (e instanceof InvalidCredentialsError) {
+        setErr("이메일 또는 비밀번호가 올바르지 않아요. 처음이라면 아래에서 계정을 만들어 주세요.");
+      } else {
+        setErr(e instanceof Error ? e.message : "로그인에 실패했어요.");
+      }
       setLoading(false);
     }
   }
@@ -251,8 +279,8 @@ export default function Login({
         <h1>{needsName ? "처음 오셨네요!" : "회사 이메일로 시작하기"}</h1>
         <p className="sub">
           {needsName
-            ? "팀원들에게 표시될 이름을 알려주세요. 바로 계정을 만들어 드릴게요."
-            : "비밀번호는 필요 없어요. 처음이라면 이메일로 바로 계정을 만들어 드려요."}
+            ? "팀원들에게 표시될 이름과 팀을 알려주세요. 입력한 이메일과 비밀번호로 계정을 만들어 드려요."
+            : "회사 이메일과 비밀번호로 로그인하세요. 처음이라면 바로 계정을 만들 수 있어요."}
         </p>
 
         <div className="input">
@@ -265,12 +293,40 @@ export default function Login({
               placeholder="you@company.com"
               value={email}
               autoComplete="email"
-              disabled={loading || needsName}
+              disabled={loading}
               onChange={(e) => {
                 setEmail(e.target.value);
                 setErr("");
               }}
             />
+          </div>
+        </div>
+
+        <div className="input">
+          <label htmlFor="password">비밀번호</label>
+          <div className="field">
+            <Icon name="lock" size={17} />
+            <input
+              id="password"
+              type={showPw ? "text" : "password"}
+              placeholder={needsName ? "사용할 비밀번호" : "비밀번호"}
+              value={password}
+              autoComplete={needsName ? "new-password" : "current-password"}
+              disabled={loading}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setErr("");
+              }}
+            />
+            <button
+              type="button"
+              className="pw-toggle"
+              onClick={() => setShowPw((s) => !s)}
+              aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 보기"}
+              disabled={loading}
+            >
+              <Icon name={showPw ? "eye-off" : "eye"} size={17} />
+            </button>
           </div>
         </div>
 
@@ -337,6 +393,16 @@ export default function Login({
               </>
             )}
         </button>
+
+        {needsName ? (
+          <button type="button" className="login-alt" onClick={backToLogin} disabled={loading}>
+            <Icon name="arrow-left" size={15} /> 다른 이메일로 로그인
+          </button>
+        ) : (
+          <button type="button" className="login-alt" onClick={goToRegister} disabled={loading}>
+            처음이신가요? <strong>계정 만들기</strong>
+          </button>
+        )}
 
         <p className="hint">로그인하면 팀의 공유 to-do와 일정에 접근할 수 있어요.</p>
       </form>
