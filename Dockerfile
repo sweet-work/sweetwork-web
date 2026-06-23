@@ -11,6 +11,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Where the /api/* proxy points — baked into the build (Next compiles rewrites at
+# build time). Defaults to the Render API; override via build arg for self-hosting.
+ARG API_PROXY_TARGET=https://sweetwork-api.onrender.com
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
