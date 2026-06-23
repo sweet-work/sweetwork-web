@@ -1,0 +1,13 @@
+services:
+  web:
+    build: .
+    image: cadence-web
+    container_name: cadence-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    # The app holds no server-side state (auth tokens live in the browser),
+    # so no volumes/DB are needed here. Add env vars above if you externalize
+    # the upstream API URL later.
