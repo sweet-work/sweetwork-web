@@ -1,14 +1,17 @@
 name: Deploy
 
-# main에 push되면 자동 배포 + Actions 탭에서 수동 실행(Run workflow)도 가능
+# Actions 탭에서 직접 실행(Run workflow)할 때만 배포 — 자동 배포 없음
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "배포할 브랜치/태그 (기본: main)"
+        required: false
+        default: main
 
-# 같은 브랜치 배포가 겹치면 이전 건 취소하고 최신 것만 실행
+# 배포가 겹치면 이전 건 취소하고 최신 것만 실행
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: deploy
   cancel-in-progress: true
 
 jobs:
@@ -24,8 +27,9 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             set -e
+            REF="${{ github.event.inputs.ref }}"
             cd /home/aiagent/sweet-work/sweetwork-web
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch origin "$REF"
+            git reset --hard "origin/$REF"
             docker compose up -d --build
             docker image prune -f
