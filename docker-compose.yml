@@ -1,13 +1,19 @@
 services:
   web:
-    build: .
-    image: cadence-web
-    container_name: cadence-web
+    build:
+      context: .
+      args:
+        # Proxy /api/* to the API container published on the host (:8000),
+        # instead of the remote Render API. host.docker.internal resolves to the
+        # host via the extra_hosts mapping below.
+        API_PROXY_TARGET: http://host.docker.internal:8000
+    image: sweetwork-web
+    container_name: sweetwork-web
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-    # The app holds no server-side state (auth tokens live in the browser),
-    # so no volumes/DB are needed here. Add env vars above if you externalize
-    # the upstream API URL later.
+    # Lets the container reach services published on the host (the API on :8000).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
