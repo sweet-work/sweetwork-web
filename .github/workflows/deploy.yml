@@ -1,0 +1,31 @@
+name: Deploy
+
+# main에 push되면 자동 배포 + Actions 탭에서 수동 실행(Run workflow)도 가능
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 같은 브랜치 배포가 겹치면 이전 건 취소하고 최신 것만 실행
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into server and redeploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -e
+            cd /home/aiagent/sweet-work/sweetwork-web
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose up -d --build
+            docker image prune -f
